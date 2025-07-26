@@ -19,75 +19,204 @@ decord.bridge.set_bridge('torch')
 
 class VideoDataset(Dataset):
     """
-    Efficiently loads video frames from files using decord.
-    Each worker process maintains its own video reader object.
+    Optimal video dataset using decord for efficient random frame access.
+    
+    Key optimizations:
+    - Worker-specific video reader caching
+    - Direct frame indexing without seeking overhead
+    - Batch frame loading for efficiency
+    - Thread-safe design for multi-worker DataLoader
+    - Automatic memory management
     """
-    def __init__(self, videos_dir="./videos", target_size=(360, 640)):
+    def __init__(self, videos_dir="./videos", target_size=(360, 640), 
+                 ctx=None, num_threads=0, fault_tol=-1):
         self.videos_dir = Path(videos_dir)
         self.target_size = target_size
         
+        # Set context for video decoding (CPU by default)
+        if ctx is None:
+            ctx = decord.cpu(0)
+        self.ctx = ctx
+        self.num_threads = num_threads
+        self.fault_tol = fault_tol
+        
         # Get all video files
-        self.video_files = sorted(list(self.videos_dir.glob("*.mp4"))) + \
-                           sorted(list(self.videos_dir.glob("*.avi"))) + \
-                           sorted(list(self.videos_dir.glob("*.mov")))
+        self.video_files = sorted(list(self.videos_dir.glob("*.mp4")) + 
+                                 list(self.videos_dir.glob("*.avi")) + 
+                                 list(self.videos_dir.glob("*.mov")))
         
         if not self.video_files:
             raise ValueError(f"No video files found in {videos_dir}")
-            
-        # This dictionary will cache the video reader objects in each worker process
-        self.video_readers = {}
         
+        # Worker-specific video reader cache
+        self._video_readers = {}
+        
+        # Build frame index mapping
         self.frame_indices = []
-        print("Scanning video lengths...")
-        for i, video_file in enumerate(tqdm(self.video_files, desc="Scanning Videos")):
-            # Open with decord to get frame count
-            vr = decord.VideoReader(str(video_file))
-            num_frames = len(vr)
-            # Create a tuple of (video_index, frame_index) for each frame
-            for frame_idx in range(num_frames):
-                self.frame_indices.append((i, frame_idx))
+        self.video_metadata = []
+        
+        print(f"Scanning {len(self.video_files)} videos...")
+        for video_idx, video_file in enumerate(tqdm(self.video_files, desc="Building frame index")):
+            # Get video metadata without loading full video
+            try:
+                # Create temporary reader to get frame count
+                temp_reader = decord.VideoReader(
+                    str(video_file), 
+                    ctx=self.ctx,
+                    width=self.target_size[1],  # decord expects (width, height)
+                    height=self.target_size[0],
+                    num_threads=self.num_threads,
+                    fault_tol=self.fault_tol
+                )
+                
+                num_frames = len(temp_reader)
+                fps = temp_reader.get_avg_fps()
+                duration = num_frames / fps if fps > 0 else 0
+                
+                # Store metadata
+                self.video_metadata.append({
+                    'path': video_file,
+                    'num_frames': num_frames,
+                    'fps': fps,
+                    'duration': duration,
+                    'width': temp_reader.get_width(),
+                    'height': temp_reader.get_height()
+                })
+                
+                # Create frame indices for this video
+                for frame_idx in range(num_frames):
+                    self.frame_indices.append((video_idx, frame_idx))
+                
+                # Close temporary reader
+                del temp_reader
+                
+            except Exception as e:
+                print(f"Warning: Could not read video {video_file}: {e}")
+                continue
+        
+        print(f"Total frames available: {len(self.frame_indices):,}")
+        print(f"Total duration: {sum(m['duration'] for m in self.video_metadata):.1f}s")
+        
+        # Print video summary
+        for i, meta in enumerate(self.video_metadata):
+            print(f"  Video {i}: {meta['num_frames']} frames, {meta['duration']:.1f}s, "
+                  f"{meta['width']}x{meta['height']} @ {meta['fps']:.1f}fps")
 
     def __len__(self):
         return len(self.frame_indices)
 
-    def __getitem__(self, idx):
-        # Get the video and frame index for the current item
-        video_idx, frame_idx = self.frame_indices[idx]
-        
-        # Get worker-specific information
+    def _get_worker_readers(self):
+        """Get worker-specific video reader cache."""
         worker_info = get_worker_info()
         worker_id = worker_info.id if worker_info is not None else -1
+        
+        if worker_id not in self._video_readers:
+            self._video_readers[worker_id] = {}
+        
+        return self._video_readers[worker_id]
 
-        # Each worker process maintains its own cache of video readers
-        if worker_id not in self.video_readers:
-            self.video_readers[worker_id] = {}
+    def _get_video_reader(self, video_idx):
+        """Get or create video reader for specific video."""
+        readers = self._get_worker_readers()
+        
+        if video_idx not in readers:
+            video_file = self.video_metadata[video_idx]['path']
+            
+            # Create optimized video reader
+            readers[video_idx] = decord.VideoReader(
+                str(video_file),
+                ctx=self.ctx,
+                width=self.target_size[1],  # decord expects (width, height)
+                height=self.target_size[0],
+                num_threads=self.num_threads,
+                fault_tol=self.fault_tol
+            )
+        
+        return readers[video_idx]
 
-        if video_idx not in self.video_readers[worker_id]:
-            # If the video reader for this video is not open in this worker, open it
-            video_path = self.video_files[video_idx]
-            # You can also specify ctx=decord.gpu(0) to use GPU for decoding
-            self.video_readers[worker_id][video_idx] = decord.VideoReader(str(video_path))
+    def __getitem__(self, idx):
+        """Get a single frame with optimal performance."""
+        video_idx, frame_idx = self.frame_indices[idx]
         
-        # Read the frame directly using the cached video reader
-        frame = self.video_readers[worker_id][video_idx][frame_idx].numpy()
+        # Get cached video reader
+        reader = self._get_video_reader(video_idx)
         
-        # Preprocess frame
-        frame = self.preprocess_frame(frame)
+        # Direct frame access (decord handles seeking optimally)
+        frame = reader[frame_idx]
         
-        # Convert to torch tensor (C, H, W)
-        frame_tensor = torch.from_numpy(frame).float().permute(2, 0, 1)
+        # Frame is already in torch format due to bridge setting
+        # Shape: (H, W, C) -> convert to (C, H, W)
+        if frame.dim() == 3:
+            frame = frame.permute(2, 0, 1)
         
-        return frame_tensor
-
-    def preprocess_frame(self, frame):
-        """Preprocess a single frame (RGB)"""
-        # Resize to target size (cv2.resize expects width, height)
-        frame = cv2.resize(frame, (self.target_size[1], self.target_size[0]))
-        
-        # Normalize to [0, 1]
-        frame = frame.astype(np.float32) / 255.0
+        # Normalize to [0, 1] if not already
+        if frame.dtype == torch.uint8:
+            frame = frame.float() / 255.0
         
         return frame
+
+    def get_batch(self, indices):
+        """Get multiple frames efficiently using decord's batch loading."""
+        if not indices:
+            return torch.empty(0, 3, *self.target_size)
+        
+        # Group indices by video for efficient batch loading
+        video_batches = {}
+        for idx in indices:
+            video_idx, frame_idx = self.frame_indices[idx]
+            if video_idx not in video_batches:
+                video_batches[video_idx] = []
+            video_batches[video_idx].append((idx, frame_idx))
+        
+        # Load frames from each video
+        frames = []
+        for video_idx, batch_indices in video_batches.items():
+            reader = self._get_video_reader(video_idx)
+            frame_indices = [fi for _, fi in batch_indices]
+            
+            # Use decord's efficient batch loading
+            batch_frames = reader.get_batch(frame_indices)
+            
+            # Convert to torch format
+            if batch_frames.dim() == 3:
+                batch_frames = batch_frames.permute(0, 3, 1, 2)  # (N, H, W, C) -> (N, C, H, W)
+            elif batch_frames.dim() == 4:
+                batch_frames = batch_frames.permute(0, 3, 1, 2)  # (N, H, W, C) -> (N, C, H, W)
+            
+            # Normalize if needed
+            if batch_frames.dtype == torch.uint8:
+                batch_frames = batch_frames.float() / 255.0
+            
+            frames.append(batch_frames)
+        
+        # Concatenate all frames
+        return torch.cat(frames, dim=0)
+
+    def get_video_info(self, video_idx):
+        """Get information about a specific video."""
+        if 0 <= video_idx < len(self.video_metadata):
+            return self.video_metadata[video_idx]
+        return None
+
+    def get_frame_info(self, idx):
+        """Get information about a specific frame."""
+        if 0 <= idx < len(self.frame_indices):
+            video_idx, frame_idx = self.frame_indices[idx]
+            video_info = self.video_metadata[video_idx]
+            return {
+                'video_idx': video_idx,
+                'frame_idx': frame_idx,
+                'video_path': video_info['path'],
+                'timestamp': frame_idx / video_info['fps'] if video_info['fps'] > 0 else 0
+            }
+        return None
+
+    def __del__(self):
+        """Cleanup video readers."""
+        for worker_readers in self._video_readers.values():
+            for reader in worker_readers.values():
+                del reader
+        self._video_readers.clear()
 
 def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, beta=0.00005, checkpoint_dir="./checkpoints", resume_path=None):
     """Train the VAE model"""
