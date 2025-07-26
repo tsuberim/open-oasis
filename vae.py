@@ -318,6 +318,9 @@ class AutoencoderKL(nn.Module):
             z = posterior.mode()
         dec = self.decode(z)
         return dec, posterior, z
+    
+    def forward(self, x, sample_posterior=True):
+        return self.autoencode(x, sample_posterior=sample_posterior)
 
     def get_input(self, batch, k):
         x = batch[k]
