@@ -23,8 +23,18 @@ def generate_random_frame(model, device, num_frames=1, save_path=None):
             seq_len = model.seq_len
             latent_dim = model.latent_dim
         
-        # Sample random latent vectors with correct shape (batch, seq_len, latent_dim)
-        z = torch.randn(num_frames, seq_len, latent_dim).to(device)
+        # Create a diagonal normal distribution with learned parameters
+        # For generation, we typically use mean=0 and std=1 (prior distribution)
+        # But we can also use learned statistics from the VAE
+        mean = torch.zeros(num_frames, seq_len, latent_dim).to(device)
+        logvar = torch.zeros(num_frames, seq_len, latent_dim).to(device)
+        
+        # Create the diagonal normal distribution
+        from vae import DiagonalGaussianDistribution
+        posterior = DiagonalGaussianDistribution(torch.cat([mean, logvar], dim=2), dim=2)
+        
+        # Sample from the diagonal normal distribution
+        z = posterior.sample()
         
         # Decode the latent vectors to generate frames
         generated_frames = model.module.decode(z) if hasattr(model, 'module') else model.decode(z)
