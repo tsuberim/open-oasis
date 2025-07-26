@@ -492,7 +492,7 @@ def main():
     # Initialize wandb
     wandb.init(
         project=args.wandb_project,
-        name=f"{args.wandb_run_name}-vae-train",
+        name=args.wandb_run_name and f"{args.wandb_run_name}-vae-train",
         config={
             "batch_size": args.batch_size,
             "epochs": args.epochs,
