@@ -354,6 +354,7 @@ def ViT_L_20_Shallow_Encoder(**kwargs):
     )
 
 
+
 VAE_models = {
     "vit-l-20-shallow-encoder": ViT_L_20_Shallow_Encoder,
 }

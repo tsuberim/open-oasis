@@ -85,7 +85,7 @@ IMAGE_EXTENSIONS = {"png", "jpg", "jpeg"}
 VIDEO_EXTENSIONS = {"mp4"}
 
 
-def load_prompt(path, video_offset=None, n_prompt_frames=1):
+def load_prompt(path, video_offset=None, n_prompt_frames=1, image_size=(360, 640)):
     if path.lower().split(".")[-1] in IMAGE_EXTENSIONS:
         print("prompt is image; ignoring video_offset and n_prompt_frames")
         prompt = read_image(path)
@@ -99,7 +99,7 @@ def load_prompt(path, video_offset=None, n_prompt_frames=1):
     else:
         raise ValueError(f"unrecognized prompt file extension; expected one in {IMAGE_EXTENSIONS} or {VIDEO_EXTENSIONS}")
     assert prompt.shape[0] == n_prompt_frames, f"input prompt {path} had less than n_prompt_frames={n_prompt_frames} frames"
-    prompt = resize(prompt, (360, 640))
+    prompt = resize(prompt, image_size)
     # add batch dimension
     prompt = rearrange(prompt, "t c h w -> 1 t c h w")
     prompt = prompt.float() / 255.0

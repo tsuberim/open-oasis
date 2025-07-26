@@ -23,19 +23,19 @@ print(f"Using device: {device}")
 
 def main(args):
     torch.manual_seed(0)
-    if device.startswith("cuda"):
+    if device.type == "cuda":
         torch.cuda.manual_seed(0)
 
     # load DiT checkpoint
-    model = DiT_models["DiT-S/2"]()
+    model = DiT_models["DiT-Small"]()
     total_params = sum(p.numel() for p in model.parameters())
     print(f"DiT model created with {total_params:,} parameters")
-    print(f"loading Oasis-500M from oasis-ckpt={os.path.abspath(args.oasis_ckpt)}...")
-    if args.oasis_ckpt.endswith(".pt"):
-        ckpt = torch.load(args.oasis_ckpt, weights_only=True)
-        model.load_state_dict(ckpt, strict=False)
-    elif args.oasis_ckpt.endswith(".safetensors"):
-        load_model(model, args.oasis_ckpt)
+    # print(f"loading Oasis-500M from oasis-ckpt={os.path.abspath(args.oasis_ckpt)}...")
+    # if args.oasis_ckpt.endswith(".pt"):
+    #     ckpt = torch.load(args.oasis_ckpt, weights_only=True)
+    #     model.load_state_dict(ckpt, strict=False)
+    # elif args.oasis_ckpt.endswith(".safetensors"):
+    #     load_model(model, args.oasis_ckpt)
     model = model.to(device).eval()
 
     # load VAE checkpoint
@@ -64,6 +64,7 @@ def main(args):
         args.prompt_path,
         video_offset=args.video_offset,
         n_prompt_frames=n_prompt_frames,
+        image_size=(360, 640),
     )
     # get input action stream
     actions = load_actions(args.actions_path, action_offset=args.video_offset)[:, :total_frames]
