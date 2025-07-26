@@ -73,8 +73,8 @@ class VideoDataset(Dataset):
                 'num_frames': num_frames,
                 'fps': fps,
                 'duration': duration,
-                'width': temp_reader.get_width(),
-                'height': temp_reader.get_height()
+                'width': temp_reader[0].shape[1],  # width from first frame
+                'height': temp_reader[0].shape[0]  # height from first frame
             })
             
             # Create frame indices for this video
