@@ -1,0 +1,36 @@
+Using device: mps
+Loading dataset...
+Scanning 2 videos...
+Scanning videos: 100%|████████████████████████████████████████████████████████████████████████| 2/2 [00:00<00:00, 166.28it/s]
+Total frames available: 125048
+Train set: 106291 frames
+Test set: 18757 frames
+Creating VAE model...
+VAE model created with 129,467,600 parameters
+Starting training...
+Epoch 1/100 [Train]:   0%|                                                                         | 0/13287 [00:00<?, ?it/s]/Users/tsuberim/Projects/open-oasis/.venv/lib/python3.13/site-packages/torch/utils/data/dataloader.py:683: UserWarning: 'pin_memory' argument is set as true but not supported on MPS now, then device pinned memory won't be used.
+  warnings.warn(warn_msg)
+Epoch 1/100 [Train]:   0%|                        | 21/13287 [00:32<5:37:01,  1.52s/it, loss=0.2936, recon=0.0790, kl=0.2146]
+Traceback (most recent call last):
+  File "/Users/tsuberim/Projects/open-oasis/train_vae.py", line 402, in <module>
+    main()
+    ~~~~^^
+  File "/Users/tsuberim/Projects/open-oasis/train_vae.py", line 388, in main
+    train_vae(
+    ~~~~~~~~~^
+        model=model,
+        ^^^^^^^^^^^^
+    ...<6 lines>...
+        resume_path=args.resume
+        ^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/tsuberim/Projects/open-oasis/train_vae.py", line 141, in train_vae
+    recon, posterior, latent = model.autoencode(frames, sample_posterior=True)
+                               ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/tsuberim/Projects/open-oasis/vae.py", line 316, in autoencode
+    z = posterior.sample()
+  File "/Users/tsuberim/Projects/open-oasis/vae.py", line 39, in sample
+    x = self.mean + self.std * torch.randn(self.mean.shape).to(device=self.parameters.device)
+                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt

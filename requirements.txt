@@ -5,4 +5,6 @@ safetensors
 timm
 tqdm
 numpy
-av 
+av
+opencv-python
+h5py 
