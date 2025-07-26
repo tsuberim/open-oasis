@@ -1,6 +1,7 @@
 import os
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader, random_split, get_worker_info
 import cv2
@@ -142,6 +143,10 @@ class VideoDataset(Dataset):
         if frame.dtype == torch.uint8:
             frame = frame.float() / 255.0
         
+        # Resize to target size
+        if frame.shape[1:] != self.target_size:
+            frame = F.interpolate(frame.unsqueeze(0), size=self.target_size, mode='bilinear', align_corners=False).squeeze(0)
+        
         return frame
 
     def get_batch(self, indices):
@@ -175,6 +180,10 @@ class VideoDataset(Dataset):
             # Normalize if needed
             if batch_frames.dtype == torch.uint8:
                 batch_frames = batch_frames.float() / 255.0
+            
+            # Resize to target size
+            if batch_frames.shape[2:] != self.target_size:
+                batch_frames = F.interpolate(batch_frames, size=self.target_size, mode='bilinear', align_corners=False)
             
             frames.append(batch_frames)
         
