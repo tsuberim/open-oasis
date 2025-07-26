@@ -298,7 +298,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                 if batch_idx % 100 == 0:
                     with torch.no_grad():
                         # Generate reconstructions for current batch
-                        batch_recon, _, _ = model.autoencode(frames, sample_posterior=False)
+                        batch_recon, _, _, _ = model(frames)
                         
                         # Convert to images for wandb
                         train_images = []
@@ -336,7 +336,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                     frames = frames.to(device)
                     
                     # VAE forward pass
-                    recon, posterior_mean, posterior_logvar, latent = model.autoencode(frames, sample_posterior=False)
+                    recon, posterior_mean, posterior_logvar, latent = model(frames)
                     
                     # Calculate losses
                     recon_loss = mse_loss(recon, frames)
