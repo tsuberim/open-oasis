@@ -353,8 +353,28 @@ def ViT_L_20_Shallow_Encoder(**kwargs):
         **kwargs,
     )
 
+def ViT_Small_Shallow_Encoder(**kwargs):
+    if "latent_dim" in kwargs:
+        latent_dim = kwargs.pop("latent_dim")
+    else:
+        latent_dim = 16
+    return AutoencoderKL(
+        latent_dim=latent_dim,
+        patch_size=20,
+        enc_dim=768,
+        enc_depth=6,
+        enc_heads=16,
+        dec_dim=768,
+        dec_depth=12,
+        dec_heads=16,
+        input_height=360,
+        input_width=640,
+        **kwargs,
+    )
+
 
 
 VAE_models = {
     "vit-l-20-shallow-encoder": ViT_L_20_Shallow_Encoder,
+    "vit-small-shallow-encoder": ViT_Small_Shallow_Encoder,
 }

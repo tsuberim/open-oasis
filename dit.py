@@ -331,9 +331,9 @@ def DiT_S_2():
 def DiT_Small():
     return DiT(
         patch_size=2,
-        hidden_size=512,
-        depth=12,
-        num_heads=12,
+        hidden_size=768,
+        depth=16,
+        num_heads=16,
     )
 
 DiT_models = {
