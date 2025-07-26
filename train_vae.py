@@ -12,6 +12,8 @@ from tqdm import tqdm
 import random
 import wandb
 import decord
+import time
+from safetensors.torch import save_file, load_file
 from vae import VAE_models
 from utils import get_device
 
@@ -216,10 +218,10 @@ class VideoDataset(Dataset):
                 del reader
         self._video_readers.clear()
 
-def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, beta=0.00005, beta_annealing=True, checkpoint_dir="./checkpoints", resume_path=None):
+def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, beta=0.00005, beta_annealing=True, checkpoint_dir="./checkpoints"):
     """Train the VAE model"""
     optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.8, patience=300)
     
     # Enable gradient checkpointing for memory efficiency
     if hasattr(model, 'gradient_checkpointing_enable'):
@@ -230,6 +232,37 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
     
     best_val_loss = float('inf')
     start_epoch = 0
+    last_checkpoint_time = time.time()
+    checkpoint_interval = 600  # 10 minutes in seconds
+    global_batch_count = 0
+    
+    # Try to load latest checkpoint for resuming
+    latest_checkpoint_path = checkpoint_dir / 'vae_checkpoint_latest.safetensors'
+    latest_metadata_path = checkpoint_dir / 'vae_checkpoint_latest_metadata.pth'
+    
+    if latest_checkpoint_path.exists() and latest_metadata_path.exists():
+        print(f"Found existing checkpoint: {latest_checkpoint_path}")
+        
+        # Load model weights with safetensors
+        model_state_dict = load_file(latest_checkpoint_path, device=device)
+        
+        # Handle DataParallel state dict loading
+        if isinstance(model, nn.DataParallel):
+            model.module.load_state_dict(model_state_dict)
+        else:
+            model.load_state_dict(model_state_dict)
+        
+        # Load metadata
+        metadata = torch.load(latest_metadata_path, map_location=device)
+        optimizer.load_state_dict(metadata['optimizer_state_dict'])
+        scheduler.load_state_dict(metadata['scheduler_state_dict'])
+        start_epoch = metadata['epoch'] + 1
+        best_val_loss = metadata['best_val_loss']
+        
+        # Recalculate global_batch_count based on start_epoch and dataset size
+        global_batch_count = start_epoch * len(train_loader)
+        
+        print(f"Resumed from epoch {start_epoch-1}, batch {global_batch_count}, best val loss: {best_val_loss:.4f}")
     
     # Beta annealing setup
     if beta_annealing:
@@ -239,25 +272,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
     else:
         current_beta = beta
     
-    # Resume from checkpoint if provided
-    if resume_path and os.path.exists(resume_path):
-        print(f"Resuming from checkpoint: {resume_path}")
-        checkpoint = torch.load(resume_path, map_location=device)
-        
-        # Handle DataParallel state dict loading
-        model_state_dict = checkpoint['model_state_dict']
-        if isinstance(model, nn.DataParallel):
-            # If current model is DataParallel, load into the module
-            model.module.load_state_dict(model_state_dict)
-        else:
-            # If current model is not DataParallel, load directly
-            model.load_state_dict(model_state_dict)
-        
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        start_epoch = checkpoint['epoch'] + 1
-        best_val_loss = checkpoint['best_val_loss']
-        print(f"Resumed from epoch {start_epoch-1}, best val loss: {best_val_loss:.4f}")
+
     
     for epoch in range(start_epoch, num_epochs):
         # Calculate current beta for annealing
@@ -277,6 +292,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         
         with tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs} [Train]") as pbar:
             for batch_idx, frames in enumerate(pbar):
+                global_batch_count += 1
                 frames = frames.to(device)
                 
                 # Forward pass
@@ -298,6 +314,39 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                 # Backward pass
                 total_loss.backward()
                 optimizer.step()
+                
+                # Step scheduler with current batch loss
+                scheduler.step(total_loss.item())
+                
+                # Save checkpoint every 10 minutes during training
+                current_time = time.time()
+                if current_time - last_checkpoint_time >= checkpoint_interval:
+                    checkpoint_path = checkpoint_dir / 'vae_checkpoint_latest.safetensors'
+                    metadata_path = checkpoint_dir / 'vae_checkpoint_latest_metadata.pth'
+                    
+                    # Handle DataParallel state dict
+                    if isinstance(model, nn.DataParallel):
+                        model_state_dict = model.module.state_dict()
+                    else:
+                        model_state_dict = model.state_dict()
+                    
+                    # Save model weights with safetensors
+                    save_file(model_state_dict, checkpoint_path)
+                    
+                    # Save metadata separately (optimizer, scheduler, etc.)
+                    torch.save({
+                        'epoch': epoch,
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'scheduler_state_dict': scheduler.state_dict(),
+                        'val_loss': val_loss if 'val_loss' in locals() else None,
+                        'train_loss': train_loss / (batch_idx + 1) if batch_idx > 0 else total_loss.item(),
+                        'best_val_loss': best_val_loss,
+                        'timestamp': current_time,
+                        'current_beta': current_beta,
+                    }, metadata_path)
+                    
+                    last_checkpoint_time = current_time
+                    print(f"  Saved checkpoint at batch {global_batch_count}, epoch {epoch+1} - {time.strftime('%H:%M:%S', time.localtime(current_time))}")
                 
                 # Update metrics
                 train_loss += total_loss.item()
@@ -440,7 +489,8 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         # Save best model
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            best_model_path = checkpoint_dir / 'best_vae_model.pth'
+            best_model_path = checkpoint_dir / 'best_vae_model.safetensors'
+            best_metadata_path = checkpoint_dir / 'best_vae_model_metadata.pth'
             
             # Handle DataParallel state dict
             if isinstance(model, nn.DataParallel):
@@ -448,38 +498,21 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
             else:
                 model_state_dict = model.state_dict()
             
+            # Save model weights with safetensors
+            save_file(model_state_dict, best_model_path)
+            
+            # Save metadata separately
             torch.save({
                 'epoch': epoch,
-                'model_state_dict': model_state_dict,
                 'optimizer_state_dict': optimizer.state_dict(),
                 'scheduler_state_dict': scheduler.state_dict(),
                 'val_loss': val_loss,
                 'train_loss': train_loss,
                 'best_val_loss': best_val_loss,
-            }, best_model_path)
+            }, best_metadata_path)
             print(f"  Saved best model with val_loss: {val_loss:.4f}")
         
-        scheduler.step(val_loss)
-        
-        # Save checkpoint every 10 epochs
-        if (epoch + 1) % 10 == 0:
-            checkpoint_path = checkpoint_dir / f'vae_checkpoint_epoch_{epoch+1}.pth'
-            
-            # Handle DataParallel state dict
-            if isinstance(model, nn.DataParallel):
-                model_state_dict = model.module.state_dict()
-            else:
-                model_state_dict = model.state_dict()
-            
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model_state_dict,
-                'optimizer_state_dict': optimizer.state_dict(),
-                'scheduler_state_dict': scheduler.state_dict(),
-                'val_loss': val_loss,
-                'train_loss': train_loss,
-                'best_val_loss': best_val_loss,
-            }, checkpoint_path)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Train VAE on videos with on-the-fly preprocessing")
@@ -493,7 +526,6 @@ def main():
     parser.add_argument("--no-beta-annealing", action="store_true", help="Disable beta annealing")
     parser.add_argument("--target-size", "-T", nargs=2, type=int, default=[360, 640], help="Target frame size (height width)")
     parser.add_argument("--checkpoint-dir", "-c", default="./checkpoints", help="Directory to save checkpoints")
-    parser.add_argument("--resume", "-r", type=str, help="Path to checkpoint to resume from")
     parser.add_argument("--wandb-project", default="world-model", help="Weights & Biases project name")
     parser.add_argument("--wandb-run-name", default=None, help="Weights & Biases run name")
     
@@ -590,8 +622,7 @@ def main():
         lr=args.lr,
         beta=args.beta,
         beta_annealing=not args.no_beta_annealing,
-        checkpoint_dir=checkpoint_dir,
-        resume_path=args.resume
+        checkpoint_dir=checkpoint_dir
     )
     
     print("Training completed!")
