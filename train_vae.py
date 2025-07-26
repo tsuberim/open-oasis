@@ -259,6 +259,9 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         print(f"Loading metadata from {latest_metadata_path}")
         metadata = torch.load(latest_metadata_path, map_location=device)
         optimizer.load_state_dict(metadata['optimizer_state_dict'])
+        # Override learning rate from function parameter
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
         scheduler.load_state_dict(metadata['scheduler_state_dict'])
         start_epoch = metadata['epoch'] + 1
         best_val_loss = metadata['best_val_loss']
@@ -552,7 +555,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
 def main():
     parser = argparse.ArgumentParser(description="Train VAE on videos with on-the-fly preprocessing")
     parser.add_argument("--videos-dir", "-d", default="./videos", help="Directory with raw videos")
-    parser.add_argument("--batch-size", "-b", type=int, default=64, help="Batch size")
+    parser.add_argument("--batch-size", "-b", type=int, default=80, help="Batch size")
     parser.add_argument("--epochs", "-e", type=int, default=20, help="Number of epochs")
     parser.add_argument("--lr", "-l", type=float, default=1e-4, help="Learning rate")
     parser.add_argument("--test-ratio", "-t", type=float, default=0.15, help="Test set ratio")
