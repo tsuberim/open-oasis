@@ -246,7 +246,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         
         # Load model weights with safetensors
         print(f"Loading model weights from {latest_checkpoint_path}")
-        model_state_dict = load_file(latest_checkpoint_path, device=device)
+        model_state_dict = load_file(latest_checkpoint_path)
         
         # Handle DataParallel state dict loading
         if isinstance(model, nn.DataParallel):
@@ -311,7 +311,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                 # Calculate losses
                 l1_recon_loss = l1_loss(recon, frames)
                 ssim_recon_loss = ssim_loss(recon, frames)
-                recon_loss = l1_recon_loss + 0.1 * ssim_recon_loss  # Combine L1 and SSIM
+                recon_loss = l1_recon_loss + 0.15 * ssim_recon_loss  # Combine L1 and SSIM
                 
                 # Calculate KL divergence manually
                 kl_loss = -0.5 * torch.sum(1 + posterior_logvar - posterior_mean.pow(2) - posterior_logvar.exp())
