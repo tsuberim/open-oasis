@@ -11,13 +11,32 @@ For more details, see our [joint blog post](https://oasis-model.github.io/) to l
 And to use the most powerful version of the model, be sure to check out the [live demo](https://oasis.us.decart.ai/) as well!
 
 ## Setup
-```
+
+### Option 1: Using requirements.txt (Recommended)
+```bash
 git clone https://github.com/etched-ai/open-oasis.git
 cd open-oasis
-# Install pytorch
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+# Create and activate virtual environment (optional but recommended)
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### Option 2: Manual installation
+```bash
+git clone https://github.com/etched-ai/open-oasis.git
+cd open-oasis
+
+# Install PyTorch (choose appropriate version for your system)
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121  # CUDA
+# OR for CPU: pip install torch torchvision
+# OR for MPS (Apple Silicon): pip install torch torchvision
+
 # Install other dependencies
-pip install einops diffusers timm av
+pip install einops safetensors timm tqdm numpy
 ```
 
 ## Download the model weights

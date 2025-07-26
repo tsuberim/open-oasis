@@ -17,7 +17,7 @@ from pprint import pprint
 import os
 
 # Get device and autocast context
-device, autocast_context = get_device()
+device = get_device()
 print(f"Using device: {device}")
 
 
@@ -28,6 +28,8 @@ def main(args):
 
     # load DiT checkpoint
     model = DiT_models["DiT-S/2"]()
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"DiT model created with {total_params:,} parameters")
     print(f"loading Oasis-500M from oasis-ckpt={os.path.abspath(args.oasis_ckpt)}...")
     if args.oasis_ckpt.endswith(".pt"):
         ckpt = torch.load(args.oasis_ckpt, weights_only=True)
@@ -38,6 +40,8 @@ def main(args):
 
     # load VAE checkpoint
     vae = VAE_models["vit-l-20-shallow-encoder"]()
+    total_params = sum(p.numel() for p in vae.parameters())
+    print(f"VAE model created with {total_params:,} parameters")
     print(f"loading ViT-VAE-L/20 from vae-ckpt={os.path.abspath(args.vae_ckpt)}...")
     if args.vae_ckpt.endswith(".pt"):
         vae_ckpt = torch.load(args.vae_ckpt, weights_only=True)
@@ -74,7 +78,7 @@ def main(args):
     scaling_factor = 0.07843137255
     x = rearrange(x, "b t c h w -> (b t) c h w")
     with torch.no_grad():
-        with autocast_context:
+        with torch.autocast(device.type, dtype=torch.half):
             x = vae.encode(x * 2 - 1).mean * scaling_factor
     x = rearrange(x, "(b t) (h w) c -> b t c h w", t=n_prompt_frames, h=H // vae.patch_size, w=W // vae.patch_size)
     x = x[:, :n_prompt_frames]
@@ -109,7 +113,7 @@ def main(args):
 
             # get model predictions
             with torch.no_grad():
-                with autocast_context:
+                with torch.autocast(device.type, dtype=torch.half):
                     v = model(x_curr, t, actions[:, start_frame : i + 1])
 
             x_start = alphas_cumprod[t].sqrt() * x_curr - (1 - alphas_cumprod[t]).sqrt() * v
