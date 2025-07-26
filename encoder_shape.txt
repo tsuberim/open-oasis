@@ -1,0 +1,31 @@
+sing device: mps
+Loading VAE model: vit-l-20-shallow-encoder
+No checkpoint provided - using random weights
+
+==================================================
+DEBUGGING ENCODER SHAPES
+==================================================
+Input image shape: torch.Size([1, 3, 360, 640])
+After patch_embed shape: torch.Size([1, 576, 1024])
+After encoder block 1 shape: torch.Size([1, 576, 1024])
+After encoder block 2 shape: torch.Size([1, 576, 1024])
+After encoder block 3 shape: torch.Size([1, 576, 1024])
+After encoder block 4 shape: torch.Size([1, 576, 1024])
+After encoder block 5 shape: torch.Size([1, 576, 1024])
+After encoder block 6 shape: torch.Size([1, 576, 1024])
+After enc_norm shape: torch.Size([1, 576, 1024])
+After quant_conv shape: torch.Size([1, 576, 32])
+Posterior mean shape: torch.Size([1, 576, 16])
+Posterior logvar shape: torch.Size([1, 576, 16])
+Sampled latent z shape: torch.Size([1, 576, 16])
+
+Model attributes:
+seq_len: 576
+seq_h: 18
+seq_w: 32
+patch_dim: 1200
+latent_dim: 16
+
+==================================================
+FINAL LATENT SHAPE: torch.Size([1, 576, 16])
+==================================================

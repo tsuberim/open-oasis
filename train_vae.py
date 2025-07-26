@@ -304,7 +304,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                 }, step=epoch * len(train_loader) + batch_idx)
                 
                 # Log sample reconstructions during training every 100 batches
-                if batch_idx % 100 == 0:
+                if batch_idx % 50 == 0:
                     with torch.no_grad():
                         # Generate reconstructions for current batch
                         batch_recon, _, _, _ = model(frames)
@@ -470,7 +470,7 @@ def main():
     parser.add_argument("--lr", "-l", type=float, default=1e-3, help="Learning rate")
     parser.add_argument("--test-ratio", "-t", type=float, default=0.15, help="Test set ratio")
     parser.add_argument("--seed", "-s", type=int, default=42, help="Random seed")
-    parser.add_argument("--beta", "-B", type=float, default=0.00005, help="Beta coefficient for KL divergence loss")
+    parser.add_argument("--beta", "-B", type=float, default=0.00001, help="Beta coefficient for KL divergence loss")
     parser.add_argument("--target-size", "-T", nargs=2, type=int, default=[360, 640], help="Target frame size (height width)")
     parser.add_argument("--checkpoint-dir", "-c", default="./checkpoints", help="Directory to save checkpoints")
     parser.add_argument("--resume", "-r", type=str, help="Path to checkpoint to resume from")
