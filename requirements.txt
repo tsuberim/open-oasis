@@ -7,4 +7,6 @@ tqdm
 numpy
 av
 opencv-python
-h5py 
+h5py
+yt-dlp
+decord 
