@@ -329,9 +329,7 @@ class AutoencoderKL(nn.Module):
         x = x.permute(0, 3, 1, 2).to(memory_format=torch.contiguous_format).float()
         return x
 
-    def forward(self, inputs, labels, split="train"):
-        rec, post, latent = self.autoencode(inputs)
-        return rec, post, latent
+
 
     def get_last_layer(self):
         return self.predictor.weight
