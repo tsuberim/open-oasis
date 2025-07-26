@@ -244,6 +244,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         print(f"Found existing checkpoint: {latest_checkpoint_path}")
         
         # Load model weights with safetensors
+        print(f"Loading model weights from {latest_checkpoint_path}")
         model_state_dict = load_file(latest_checkpoint_path, device=device)
         
         # Handle DataParallel state dict loading
@@ -251,8 +252,10 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
             model.module.load_state_dict(model_state_dict)
         else:
             model.load_state_dict(model_state_dict)
+        print("Model weights loaded successfully")
         
         # Load metadata
+        print(f"Loading metadata from {latest_metadata_path}")
         metadata = torch.load(latest_metadata_path, map_location=device)
         optimizer.load_state_dict(metadata['optimizer_state_dict'])
         scheduler.load_state_dict(metadata['scheduler_state_dict'])
@@ -262,6 +265,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         # Recalculate global_batch_count based on start_epoch and dataset size
         global_batch_count = start_epoch * len(train_loader)
         
+        print("Metadata loaded successfully")
         print(f"Resumed from epoch {start_epoch-1}, batch {global_batch_count}, best val loss: {best_val_loss:.4f}")
     
     # Beta annealing setup
@@ -331,9 +335,11 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                         model_state_dict = model.state_dict()
                     
                     # Save model weights with safetensors
+                    print(f"  Saving model weights to {checkpoint_path}")
                     save_file(model_state_dict, checkpoint_path)
                     
                     # Save metadata separately (optimizer, scheduler, etc.)
+                    print(f"  Saving metadata to {metadata_path}")
                     torch.save({
                         'epoch': epoch,
                         'optimizer_state_dict': optimizer.state_dict(),
@@ -499,9 +505,11 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                 model_state_dict = model.state_dict()
             
             # Save model weights with safetensors
+            print(f"  Saving best model weights to {best_model_path}")
             save_file(model_state_dict, best_model_path)
             
             # Save metadata separately
+            print(f"  Saving best model metadata to {best_metadata_path}")
             torch.save({
                 'epoch': epoch,
                 'optimizer_state_dict': optimizer.state_dict(),
