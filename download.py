@@ -27,8 +27,9 @@ for url in urls:
     print(f"Downloading {url} to {out_path} (video only, 480p mp4)...")
     cmd = [
         "yt-dlp",
-        "-f", "bestvideo[height<=480][ext=mp4]",
+        "-f", "bestvideo[height<=480][vcodec^=avc1]",
         "--no-audio",
+        "--recode-video", "mp4",
         "-o", out_path,
         url
     ]
