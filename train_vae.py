@@ -58,41 +58,34 @@ class VideoDataset(Dataset):
         print(f"Scanning {len(self.video_files)} videos...")
         for video_idx, video_file in enumerate(tqdm(self.video_files, desc="Building frame index")):
             # Get video metadata without loading full video
-            try:
-                # Create temporary reader to get frame count
-                temp_reader = decord.VideoReader(
-                    str(video_file), 
-                    ctx=self.ctx,
-                    width=self.target_size[1],  # decord expects (width, height)
-                    height=self.target_size[0],
-                    num_threads=self.num_threads,
-                    fault_tol=self.fault_tol
-                )
-                
-                num_frames = len(temp_reader)
-                fps = temp_reader.get_avg_fps()
-                duration = num_frames / fps if fps > 0 else 0
-                
-                # Store metadata
-                self.video_metadata.append({
-                    'path': video_file,
-                    'num_frames': num_frames,
-                    'fps': fps,
-                    'duration': duration,
-                    'width': temp_reader.get_width(),
-                    'height': temp_reader.get_height()
-                })
-                
-                # Create frame indices for this video
-                for frame_idx in range(num_frames):
-                    self.frame_indices.append((video_idx, frame_idx))
-                
-                # Close temporary reader
-                del temp_reader
-                
-            except Exception as e:
-                print(f"Warning: Could not read video {video_file}: {e}")
-                continue
+            temp_reader = decord.VideoReader(
+                str(video_file), 
+                ctx=self.ctx
+            )
+            
+            num_frames = len(temp_reader)
+            fps = temp_reader.get_avg_fps()
+            duration = num_frames / fps if fps > 0 else 0
+            
+            # Store metadata
+            self.video_metadata.append({
+                'path': video_file,
+                'num_frames': num_frames,
+                'fps': fps,
+                'duration': duration,
+                'width': temp_reader.get_width(),
+                'height': temp_reader.get_height()
+            })
+            
+            # Create frame indices for this video
+            for frame_idx in range(num_frames):
+                self.frame_indices.append((video_idx, frame_idx))
+            
+            # Close temporary reader
+            del temp_reader
+        
+        if not self.video_files:
+            raise ValueError(f"No valid video files found in {videos_dir}. All videos failed to load.")
         
         print(f"Total frames available: {len(self.frame_indices):,}")
         print(f"Total duration: {sum(m['duration'] for m in self.video_metadata):.1f}s")
@@ -125,11 +118,7 @@ class VideoDataset(Dataset):
             # Create optimized video reader
             readers[video_idx] = decord.VideoReader(
                 str(video_file),
-                ctx=self.ctx,
-                width=self.target_size[1],  # decord expects (width, height)
-                height=self.target_size[0],
-                num_threads=self.num_threads,
-                fault_tol=self.fault_tol
+                ctx=self.ctx
             )
         
         return readers[video_idx]
@@ -464,7 +453,6 @@ def main():
     parser.add_argument("--test-ratio", "-t", type=float, default=0.15, help="Test set ratio")
     parser.add_argument("--seed", "-s", type=int, default=42, help="Random seed")
     parser.add_argument("--beta", "-B", type=float, default=0.00005, help="Beta coefficient for KL divergence loss")
-    
     parser.add_argument("--target-size", "-T", nargs=2, type=int, default=[360, 640], help="Target frame size (height width)")
     parser.add_argument("--checkpoint-dir", "-c", default="./checkpoints", help="Directory to save checkpoints")
     parser.add_argument("--resume", "-r", type=str, help="Path to checkpoint to resume from")
