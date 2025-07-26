@@ -300,9 +300,8 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                     'train_batch_recon_loss': recon_loss.item(),
                     'train_batch_kl_loss': kl_loss.item(),
                     'learning_rate': optimizer.param_groups[0]['lr'],
-                    'batch': batch_idx,
                     'epoch': epoch + 1
-                })
+                }, step=epoch * len(train_loader) + batch_idx)
                 
                 # Log sample reconstructions during training every 100 batches
                 if batch_idx % 100 == 0:
@@ -412,7 +411,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         # Add validation sample images
         log_dict['val_samples'] = sample_images
         
-        wandb.log(log_dict)
+        wandb.log(log_dict, step=(epoch + 1) * len(train_loader))
         
         # Print epoch summary
         print(f"Epoch {epoch+1}/{num_epochs}:")
