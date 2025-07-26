@@ -106,6 +106,24 @@ def load_prompt(path, video_offset=None, n_prompt_frames=1):
     return prompt
 
 
+def get_device():
+    """
+    Get the best available device (MPS > CUDA > CPU)
+    Returns device string and autocast context
+    """
+    if torch.backends.mps.is_available():
+        device = "mps"
+        autocast_context = torch.autocast("cpu")  # MPS doesn't support autocast yet
+    elif torch.cuda.is_available():
+        device = "cuda"
+        autocast_context = torch.autocast("cuda", dtype=torch.half)
+    else:
+        device = "cpu"
+        autocast_context = torch.autocast("cpu")
+    
+    return device, autocast_context
+
+
 def load_actions(path, action_offset=None):
     if path.endswith(".actions.pt"):
         actions = one_hot_actions(torch.load(path))

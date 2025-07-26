@@ -7,22 +7,24 @@ import torch
 from dit import DiT_models
 from vae import VAE_models
 from torchvision.io import read_video, write_video
-from utils import load_prompt, load_actions, sigmoid_beta_schedule
+from utils import load_prompt, load_actions, sigmoid_beta_schedule, get_device
 from tqdm import tqdm
 from einops import rearrange
-from torch import autocast
+
 from safetensors.torch import load_model
 import argparse
 from pprint import pprint
 import os
 
-assert torch.cuda.is_available()
-device = "cuda:0"
+# Get device and autocast context
+device, autocast_context = get_device()
+print(f"Using device: {device}")
 
 
 def main(args):
     torch.manual_seed(0)
-    torch.cuda.manual_seed(0)
+    if device.startswith("cuda"):
+        torch.cuda.manual_seed(0)
 
     # load DiT checkpoint
     model = DiT_models["DiT-S/2"]()
@@ -72,7 +74,7 @@ def main(args):
     scaling_factor = 0.07843137255
     x = rearrange(x, "b t c h w -> (b t) c h w")
     with torch.no_grad():
-        with autocast("cuda", dtype=torch.half):
+        with autocast_context:
             x = vae.encode(x * 2 - 1).mean * scaling_factor
     x = rearrange(x, "(b t) (h w) c -> b t c h w", t=n_prompt_frames, h=H // vae.patch_size, w=W // vae.patch_size)
     x = x[:, :n_prompt_frames]
@@ -107,7 +109,7 @@ def main(args):
 
             # get model predictions
             with torch.no_grad():
-                with autocast("cuda", dtype=torch.half):
+                with autocast_context:
                     v = model(x_curr, t, actions[:, start_frame : i + 1])
 
             x_start = alphas_cumprod[t].sqrt() * x_curr - (1 - alphas_cumprod[t]).sqrt() * v
