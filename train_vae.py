@@ -406,6 +406,11 @@ def main():
     total_params = sum(p.numel() for p in model.parameters())
     print(f"VAE model created with {total_params:,} parameters")
     
+    # Use DataParallel if multiple GPUs are available
+    if torch.cuda.device_count() > 1:
+        print(f"Using {torch.cuda.device_count()} GPUs with DataParallel")
+        model = nn.DataParallel(model)
+    
     model = model.to(device)
     
     # Train the model
