@@ -216,7 +216,7 @@ class VideoDataset(Dataset):
                 del reader
         self._video_readers.clear()
 
-def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, beta=0.00005, checkpoint_dir="./checkpoints", resume_path=None):
+def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, beta=0.00005, beta_annealing=True, checkpoint_dir="./checkpoints", resume_path=None):
     """Train the VAE model"""
     optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
@@ -230,6 +230,14 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
     
     best_val_loss = float('inf')
     start_epoch = 0
+    
+    # Beta annealing setup
+    if beta_annealing:
+        initial_beta = 0.0
+        final_beta = beta
+        beta_warmup_epochs = min(10, num_epochs // 4)  # Warm up over first 25% of training
+    else:
+        current_beta = beta
     
     # Resume from checkpoint if provided
     if resume_path and os.path.exists(resume_path):
@@ -252,6 +260,15 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         print(f"Resumed from epoch {start_epoch-1}, best val loss: {best_val_loss:.4f}")
     
     for epoch in range(start_epoch, num_epochs):
+        # Calculate current beta for annealing
+        if beta_annealing:
+            if epoch < beta_warmup_epochs:
+                current_beta = initial_beta + (final_beta - initial_beta) * (epoch / beta_warmup_epochs)
+            else:
+                current_beta = final_beta
+        else:
+            current_beta = beta
+        
         # Training phase
         model.train()
         train_loss = 0.0
@@ -274,7 +291,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                 # Calculate KL divergence manually
                 kl_loss = -0.5 * torch.sum(1 + posterior_logvar - posterior_mean.pow(2) - posterior_logvar.exp())
                 kl_loss = kl_loss / frames.size(0)  # Normalize by batch size
-                kl_loss = beta * kl_loss  # Apply beta coefficient
+                kl_loss = current_beta * kl_loss  # Apply current beta coefficient
                 
                 total_loss = recon_loss + kl_loss
                 
@@ -300,6 +317,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                     'train_batch_recon_loss': recon_loss.item(),
                     'train_batch_kl_loss': kl_loss.item(),
                     'learning_rate': optimizer.param_groups[0]['lr'],
+                    'beta': current_beta,
                     'epoch': epoch + 1
                 }, step=epoch * len(train_loader) + batch_idx)
                 
@@ -353,7 +371,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                     # Calculate KL divergence manually
                     kl_loss = -0.5 * torch.sum(1 + posterior_logvar - posterior_mean.pow(2) - posterior_logvar.exp())
                     kl_loss = kl_loss / frames.size(0)  # Normalize by batch size
-                    kl_loss = beta * kl_loss  # Apply beta coefficient
+                    kl_loss = current_beta * kl_loss  # Apply current beta coefficient
                     
                     total_loss = recon_loss + kl_loss
                     
@@ -406,6 +424,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
             'val_recon_loss': val_recon_loss,
             'val_kl_loss': val_kl_loss,
             'learning_rate': optimizer.param_groups[0]['lr'],
+            'beta': current_beta,
         }
         
         # Add validation sample images
@@ -470,7 +489,8 @@ def main():
     parser.add_argument("--lr", "-l", type=float, default=1e-3, help="Learning rate")
     parser.add_argument("--test-ratio", "-t", type=float, default=0.15, help="Test set ratio")
     parser.add_argument("--seed", "-s", type=int, default=42, help="Random seed")
-    parser.add_argument("--beta", "-B", type=float, default=0.000001, help="Beta coefficient for KL divergence loss")
+    parser.add_argument("--beta", "-B", type=float, default=0.00001, help="Beta coefficient for KL divergence loss")
+    parser.add_argument("--no-beta-annealing", action="store_true", help="Disable beta annealing")
     parser.add_argument("--target-size", "-T", nargs=2, type=int, default=[360, 640], help="Target frame size (height width)")
     parser.add_argument("--checkpoint-dir", "-c", default="./checkpoints", help="Directory to save checkpoints")
     parser.add_argument("--resume", "-r", type=str, help="Path to checkpoint to resume from")
@@ -498,6 +518,7 @@ def main():
             "lr": args.lr,
             "test_ratio": args.test_ratio,
             "beta": args.beta,
+            "beta_annealing": not args.no_beta_annealing,
             "target_size": args.target_size,
             "seed": args.seed,
         }
@@ -568,6 +589,7 @@ def main():
         num_epochs=args.epochs,
         lr=args.lr,
         beta=args.beta,
+        beta_annealing=not args.no_beta_annealing,
         checkpoint_dir=checkpoint_dir,
         resume_path=args.resume
     )
