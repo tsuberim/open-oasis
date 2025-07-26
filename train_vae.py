@@ -294,6 +294,16 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                     'kl': f'{kl_loss.item():.4f}'
                 })
                 
+                # Log training metrics every batch
+                wandb.log({
+                    'train_batch_loss': total_loss.item(),
+                    'train_batch_recon_loss': recon_loss.item(),
+                    'train_batch_kl_loss': kl_loss.item(),
+                    'learning_rate': optimizer.param_groups[0]['lr'],
+                    'batch': batch_idx,
+                    'epoch': epoch + 1
+                })l
+                
                 # Log sample reconstructions during training every 100 batches
                 if batch_idx % 100 == 0:
                     with torch.no_grad():
@@ -390,13 +400,13 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         # Log to wandb
         log_dict = {
             'epoch': epoch + 1,
-            'train/loss': train_loss,
-            'train/recon_loss': train_recon_loss,
-            'train/kl_loss': train_kl_loss,
-            'val/loss': val_loss,
-            'val/recon_loss': val_recon_loss,
-            'val/kl_loss': val_kl_loss,
-            'lr': scheduler.get_last_lr()[0],
+            'train_loss': train_loss,
+            'train_recon_loss': train_recon_loss,
+            'train_kl_loss': train_kl_loss,
+            'val_loss': val_loss,
+            'val_recon_loss': val_recon_loss,
+            'val_kl_loss': val_kl_loss,
+            'learning_rate': optimizer.param_groups[0]['lr'],
         }
         
         # Add validation sample images
