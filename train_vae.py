@@ -278,7 +278,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
 
     # Beta annealing setup
     if beta_annealing:
-        initial_beta = 1e-6
+        initial_beta = 1e-7
         final_beta = beta
         beta_warmup_epochs = min(10, num_epochs // 4)  # Warm up over first 25% of training
     else:
