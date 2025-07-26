@@ -178,12 +178,11 @@ def interactive_generation(model, device, prompt_image_path, output_path="intera
     # Create 3 random orthogonal directions in latent space
     latent_dim = model.latent_dim
     sequence_length = model.seq_len
-    total_latent_dim = latent_dim * sequence_length
     
     print("Creating 3 random orthogonal directions in latent space...")
     
-    # Generate 3 random vectors
-    directions = torch.randn(3, total_latent_dim, device=device)
+    # Generate 3 random vectors in latent_dim space
+    directions = torch.randn(3, latent_dim, device=device)
     
     # Gram-Schmidt orthogonalization to make them orthogonal
     directions[0] = directions[0] / directions[0].norm()
@@ -225,7 +224,9 @@ def interactive_generation(model, device, prompt_image_path, output_path="intera
         # Generate noise using the orthogonal directions
         with torch.no_grad():
             # Linear combination of the three orthogonal directions
-            noise = (param1 * directions[0] + param2 * directions[1] + param3 * directions[2]).view(1, sequence_length, latent_dim)
+            direction_combination = param1 * directions[0] + param2 * directions[1] + param3 * directions[2]
+            # Apply to each position in the sequence
+            noise = direction_combination.unsqueeze(0).unsqueeze(0).expand(1, sequence_length, latent_dim)
             print(f"Slider values: {param1:.3f}, {param2:.3f}, {param3:.3f}")
             print(f"Direction magnitudes: {directions[0].norm():.3f}, {directions[1].norm():.3f}, {directions[2].norm():.3f}")
             print(f"Direction combination - mean: {noise.mean():.3f}, std: {noise.std():.3f}")
@@ -245,7 +246,13 @@ def interactive_generation(model, device, prompt_image_path, output_path="intera
             
             # Decode to generate image
             generated_images = model.decode(sampled_latent)
+            print(f"Raw model output - min: {generated_images.min():.3f}, max: {generated_images.max():.3f}, mean: {generated_images.mean():.3f}")
+            
+            # Apply basic normalization to ensure proper range
             generated_images = torch.clamp(generated_images, 0, 1)
+            print("Applied clamp to [0,1] range")
+            
+            print(f"Final output - min: {generated_images.min():.3f}, max: {generated_images.max():.3f}, mean: {generated_images.mean():.3f}")
             
             # Update display
             generated_display = generated_images[0].cpu().permute(1, 2, 0).numpy()
@@ -304,7 +311,9 @@ def interactive_generation(model, device, prompt_image_path, output_path="intera
     # Save the final generated image
     with torch.no_grad():
         # Linear combination of the three orthogonal directions
-        noise = (slider1.val * directions[0] + slider2.val * directions[1] + slider3.val * directions[2]).view(1, sequence_length, latent_dim)
+        direction_combination = slider1.val * directions[0] + slider2.val * directions[1] + slider3.val * directions[2]
+        # Apply to each position in the sequence
+        noise = direction_combination.unsqueeze(0).unsqueeze(0).expand(1, sequence_length, latent_dim)
         sampled_latent = posterior_mean + noise * std * slider4.val
         generated_images = model.decode(sampled_latent)
         generated_images = torch.clamp(generated_images, 0, 1)
