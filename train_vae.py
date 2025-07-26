@@ -100,7 +100,7 @@ class VideoDataset(Dataset):
 def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, checkpoint_dir="./checkpoints", resume_path=None):
     """Train the VAE model"""
     optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3, verbose=True)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
     
     # Enable gradient checkpointing for memory efficiency
     if hasattr(model, 'gradient_checkpointing_enable'):
