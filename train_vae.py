@@ -259,9 +259,8 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         print(f"Loading metadata from {latest_metadata_path}")
         metadata = torch.load(latest_metadata_path, map_location=device)
         optimizer.load_state_dict(metadata['optimizer_state_dict'])
-        # Override learning rate from function parameter
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = lr
+        
+        print(f"Overrode learning rate to {lr}")
         scheduler.load_state_dict(metadata['scheduler_state_dict'])
         start_epoch = metadata['epoch'] + 1
         best_val_loss = metadata['best_val_loss']
@@ -272,6 +271,11 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         print("Metadata loaded successfully")
         print(f"Resumed from epoch {start_epoch-1}, batch {global_batch_count}, best val loss: {best_val_loss:.4f}")
     
+    # Override learning rate from function parameter
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = 1e-4
+        print(f"Overrode learning rate to {param_group['lr']}")
+
     # Beta annealing setup
     if beta_annealing:
         initial_beta = 1e-6
