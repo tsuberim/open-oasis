@@ -266,13 +266,13 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                 optimizer.zero_grad()
                 
                 # VAE forward pass
-                recon, posterior, latent = model(frames)
+                recon, posterior_mean, posterior_logvar, latent = model(frames)
                 
                 # Calculate losses
                 recon_loss = mse_loss(recon, frames)
                 
                 # Calculate KL divergence manually
-                kl_loss = -0.5 * torch.sum(1 + posterior.logvar - posterior.mean.pow(2) - posterior.logvar.exp())
+                kl_loss = -0.5 * torch.sum(1 + posterior_logvar - posterior_mean.pow(2) - posterior_logvar.exp())
                 kl_loss = kl_loss / frames.size(0)  # Normalize by batch size
                 kl_loss = beta * kl_loss  # Apply beta coefficient
                 
@@ -336,13 +336,13 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                     frames = frames.to(device)
                     
                     # VAE forward pass
-                    recon, posterior, latent = model.autoencode(frames, sample_posterior=False)
+                    recon, posterior_mean, posterior_logvar, latent = model.autoencode(frames, sample_posterior=False)
                     
                     # Calculate losses
                     recon_loss = mse_loss(recon, frames)
                     
                     # Calculate KL divergence manually
-                    kl_loss = -0.5 * torch.sum(1 + posterior.logvar - posterior.mean.pow(2) - posterior.logvar.exp())
+                    kl_loss = -0.5 * torch.sum(1 + posterior_logvar - posterior_mean.pow(2) - posterior_logvar.exp())
                     kl_loss = kl_loss / frames.size(0)  # Normalize by batch size
                     kl_loss = beta * kl_loss  # Apply beta coefficient
                     

@@ -320,7 +320,9 @@ class AutoencoderKL(nn.Module):
         return dec, posterior, z
     
     def forward(self, x):
-        return self.autoencode(x, sample_posterior=True)
+        dec, posterior, z = self.autoencode(x, sample_posterior=True)
+        # Return tensors that DataParallel can handle
+        return dec, posterior.mean, posterior.logvar, z
 
     def get_input(self, batch, k):
         x = batch[k]
