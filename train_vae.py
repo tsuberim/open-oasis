@@ -302,7 +302,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                     'learning_rate': optimizer.param_groups[0]['lr'],
                     'batch': batch_idx,
                     'epoch': epoch + 1
-                })l
+                })
                 
                 # Log sample reconstructions during training every 100 batches
                 if batch_idx % 100 == 0:
