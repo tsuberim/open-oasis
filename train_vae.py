@@ -486,7 +486,7 @@ def main():
     parser.add_argument("--videos-dir", "-d", default="./videos", help="Directory with raw videos")
     parser.add_argument("--batch-size", "-b", type=int, default=80, help="Batch size")
     parser.add_argument("--epochs", "-e", type=int, default=20, help="Number of epochs")
-    parser.add_argument("--lr", "-l", type=float, default=1e-3, help="Learning rate")
+    parser.add_argument("--lr", "-l", type=float, default=1e-4, help="Learning rate")
     parser.add_argument("--test-ratio", "-t", type=float, default=0.15, help="Test set ratio")
     parser.add_argument("--seed", "-s", type=int, default=42, help="Random seed")
     parser.add_argument("--beta", "-B", type=float, default=0.00001, help="Beta coefficient for KL divergence loss")
