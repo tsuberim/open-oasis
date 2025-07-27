@@ -13,6 +13,8 @@ import random
 import wandb
 import decord
 import time
+import signal
+import sys
 from safetensors.torch import save_file, load_file
 from vae import VAE_models
 from utils import get_device
@@ -218,6 +220,44 @@ class VideoDataset(Dataset):
                 del reader
         self._video_readers.clear()
 
+def save_checkpoint_on_signal(model, optimizer, scheduler, epoch, best_val_loss, current_beta, checkpoint_dir, global_batch_count):
+    """Save checkpoint when receiving termination signal"""
+    print(f"\nReceived termination signal. Saving checkpoint...")
+    
+    checkpoint_path = checkpoint_dir / 'vae_checkpoint_latest.safetensors'
+    metadata_path = checkpoint_dir / 'vae_checkpoint_latest_metadata.pth'
+    
+    try:
+        # Handle DataParallel state dict
+        if isinstance(model, nn.DataParallel):
+            model_state_dict = model.module.state_dict()
+        else:
+            model_state_dict = model.state_dict()
+        
+        # Save model weights with safetensors
+        print(f"  Saving model weights to {checkpoint_path}")
+        save_file(model_state_dict, checkpoint_path)
+        
+        # Save metadata separately
+        print(f"  Saving metadata to {metadata_path}")
+        torch.save({
+            'epoch': epoch,
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+            'best_val_loss': best_val_loss,
+            'timestamp': time.time(),
+            'current_beta': current_beta,
+            'global_batch_count': global_batch_count,
+        }, metadata_path)
+        
+        print(f"  Checkpoint saved successfully at epoch {epoch+1}, batch {global_batch_count}")
+        
+    except Exception as e:
+        print(f"  Error saving checkpoint: {e}")
+    
+    print("Exiting gracefully...")
+    sys.exit(0)
+
 def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, beta=0.00005, beta_annealing=True, checkpoint_dir="./checkpoints"):
     """Train the VAE model"""
     optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
@@ -240,40 +280,69 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
     latest_checkpoint_path = checkpoint_dir / 'vae_checkpoint_latest.safetensors'
     latest_metadata_path = checkpoint_dir / 'vae_checkpoint_latest_metadata.pth'
     
-    if latest_checkpoint_path.exists() and latest_metadata_path.exists():
+    if latest_checkpoint_path.exists():
         print(f"Found existing checkpoint: {latest_checkpoint_path}")
         
-        # Load model weights with safetensors
-        print(f"Loading model weights from {latest_checkpoint_path}")
-        model_state_dict = load_file(latest_checkpoint_path)
-        
-        # Handle DataParallel state dict loading
-        if isinstance(model, nn.DataParallel):
-            model.module.load_state_dict(model_state_dict)
-        else:
-            model.load_state_dict(model_state_dict)
-        print("Model weights loaded successfully")
-        
-        # Load metadata
-        print(f"Loading metadata from {latest_metadata_path}")
-        metadata = torch.load(latest_metadata_path, map_location=device)
-        optimizer.load_state_dict(metadata['optimizer_state_dict'])
-        
-        print(f"Overrode learning rate to {lr}")
-        scheduler.load_state_dict(metadata['scheduler_state_dict'])
-        start_epoch = metadata['epoch'] + 1
-        best_val_loss = metadata['best_val_loss']
-        
-        # Recalculate global_batch_count based on start_epoch and dataset size
-        global_batch_count = start_epoch * len(train_loader)
-        
-        print("Metadata loaded successfully")
-        print(f"Resumed from epoch {start_epoch-1}, batch {global_batch_count}, best val loss: {best_val_loss:.4f}")
+        # Try to load model weights first
+        try:
+            print(f"Loading model weights from {latest_checkpoint_path}")
+            model_state_dict = load_file(latest_checkpoint_path)
+            
+            # Handle DataParallel state dict loading
+            if isinstance(model, nn.DataParallel):
+                model.module.load_state_dict(model_state_dict)
+            else:
+                model.load_state_dict(model_state_dict)
+            print("Model weights loaded successfully")
+            
+            # Try to load metadata if it exists
+            if latest_metadata_path.exists():
+                try:
+                    print(f"Loading metadata from {latest_metadata_path}")
+                    metadata = torch.load(latest_metadata_path, map_location=device)
+                    optimizer.load_state_dict(metadata['optimizer_state_dict'])
+                    scheduler.load_state_dict(metadata['scheduler_state_dict'])
+                    start_epoch = metadata['epoch'] + 1
+                    best_val_loss = metadata['best_val_loss']
+                    
+                    # Recalculate global_batch_count based on start_epoch and dataset size
+                    global_batch_count = start_epoch * len(train_loader)
+                    
+                    print("Metadata loaded successfully")
+                    print(f"Resumed from epoch {start_epoch-1}, batch {global_batch_count}, best val loss: {best_val_loss:.4f}")
+                    
+                except Exception as e:
+                    print(f"Error loading metadata: {e}")
+                    print("Continuing with loaded model weights but fresh training state...")
+                    # Keep the loaded model but reset training state
+                    start_epoch = 0
+                    best_val_loss = float('inf')
+                    global_batch_count = 0
+            else:
+                print("No metadata file found, continuing with loaded model weights but fresh training state...")
+                start_epoch = 0
+                best_val_loss = float('inf')
+                global_batch_count = 0
+                
+        except Exception as e:
+            print(f"Error loading model weights: {e}")
+            print("Starting training from scratch...")
+            # Reset to initial values
+            start_epoch = 0
+            best_val_loss = float('inf')
+            global_batch_count = 0
     
     # Override learning rate from function parameter
     for param_group in optimizer.param_groups:
         param_group['lr'] = 1e-4
         print(f"Overrode learning rate to {param_group['lr']}")
+
+    # Set up signal handlers for graceful shutdown
+    def signal_handler(signum, frame):
+        save_checkpoint_on_signal(model, optimizer, scheduler, epoch, best_val_loss, current_beta, checkpoint_dir, global_batch_count)
+    
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
 
     # Beta annealing setup
     if beta_annealing:
