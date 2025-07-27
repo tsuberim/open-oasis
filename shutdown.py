@@ -25,7 +25,7 @@ def shutdown_pod():
         sys.exit(1)
 
     # First, let's check if the pod exists and get its status
-    pod_url = f"https://api.runpod.io/v2/pod/{pod_id}"
+    pod_url = f"https://rest.runpod.io/v1/pods/{pod_id}"
     headers = {
         "Authorization": f"Bearer {api_key}"
     }
@@ -52,7 +52,7 @@ def shutdown_pod():
         return
 
     # Construct the API endpoint URL for stopping the pod
-    stop_url = f"https://api.runpod.io/v2/pod/{pod_id}/stop"
+    stop_url = f"https://rest.runpod.io/v1/pods/{pod_id}/stop"
 
     # Make the POST request to stop the pod
     print(f"Sending stop request for pod: {pod_id}...")
@@ -71,41 +71,62 @@ def list_pods(api_key):
         headers = {
             "Authorization": f"Bearer {api_key}"
         }
-        # Try the correct API endpoint for listing pods
-        response = requests.get("https://api.runpod.io/v2/pods", headers=headers)
         
-        if response.status_code == 200:
-            pods = response.json()
-            if pods:
-                print("Available pods:")
-                for pod in pods:
-                    pod_id = pod.get('id', 'unknown')
-                    status = pod.get('desiredStatus', 'unknown')
-                    name = pod.get('name', 'unnamed')
-                    print(f"  - {pod_id} ({name}): {status}")
+        # According to RunPod API docs, try these endpoints
+        endpoints = [
+            "https://rest.runpod.io/v1/pods",
+            "https://rest.runpod.io/v1/pod",
+            "https://api.runpod.io/v2/pods",  # Try v2 API as fallback
+            "https://api.runpod.io/v2/pod",   # Try v2 API as fallback
+        ]
+        
+        success = False
+        for endpoint in endpoints:
+            try:
+                print(f"Trying endpoint: {endpoint}")
+                response = requests.get(endpoint, headers=headers)
+                print(f"  Status: {response.status_code}")
+                
+                if response.status_code == 200:
+                    pods = response.json()
+                    if pods:
+                        print("Available pods:")
+                        for pod in pods:
+                            pod_id = pod.get('id', 'unknown')
+                            status = pod.get('desiredStatus', pod.get('status', 'unknown'))
+                            name = pod.get('name', 'unnamed')
+                            print(f"  - {pod_id} ({name}): {status}")
+                    else:
+                        print("No pods found.")
+                    success = True
+                    break
+                elif response.status_code == 401:
+                    print("  Unauthorized - check your API key")
+                    break
+                elif response.status_code == 403:
+                    print("  Forbidden - check your API permissions")
+                    break
+                else:
+                    print(f"  Response: {response.text}")
+                    
+            except Exception as e:
+                print(f"  Error: {e}")
+        
+        if not success:
+            print("\nAll endpoints failed. Please check:")
+            print("1. Your API key is correct")
+            print("2. You have the right permissions")
+            print("3. You're using the correct API version")
+            print("4. Your account has active pods")
+            
+            # Test API key validity
+            print("\nTesting API key...")
+            test_response = requests.get("https://rest.runpod.io/v1/user", headers=headers)
+            if test_response.status_code == 200:
+                user_info = test_response.json()
+                print(f"API key is valid. User: {user_info.get('name', 'unknown')}")
             else:
-                print("No pods found.")
-        else:
-            print(f"Failed to list pods. Status code: {response.status_code}")
-            print(f"Response: {response.text}")
-            print("\nTrying alternative endpoints...")
-            
-            # Try alternative endpoints
-            endpoints = [
-                "https://api.runpod.io/v2/pod",
-                "https://api.runpod.io/v2/pods",
-                "https://api.runpod.io/v2/endpoint/pods"
-            ]
-            
-            for endpoint in endpoints:
-                try:
-                    alt_response = requests.get(endpoint, headers=headers)
-                    print(f"  {endpoint}: {alt_response.status_code}")
-                    if alt_response.status_code == 200:
-                        print(f"  Success with {endpoint}")
-                        break
-                except Exception as e:
-                    print(f"  {endpoint}: Error - {e}")
+                print(f"API key test failed: {test_response.status_code}")
                     
     except Exception as e:
         print(f"Error listing pods: {e}")
