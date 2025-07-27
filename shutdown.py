@@ -71,7 +71,8 @@ def list_pods(api_key):
         headers = {
             "Authorization": f"Bearer {api_key}"
         }
-        response = requests.get("https://api.runpod.io/v2/pod", headers=headers)
+        # Try the correct API endpoint for listing pods
+        response = requests.get("https://api.runpod.io/v2/pods", headers=headers)
         
         if response.status_code == 200:
             pods = response.json()
@@ -80,13 +81,35 @@ def list_pods(api_key):
                 for pod in pods:
                     pod_id = pod.get('id', 'unknown')
                     status = pod.get('desiredStatus', 'unknown')
-                    print(f"  - {pod_id}: {status}")
+                    name = pod.get('name', 'unnamed')
+                    print(f"  - {pod_id} ({name}): {status}")
             else:
                 print("No pods found.")
         else:
             print(f"Failed to list pods. Status code: {response.status_code}")
+            print(f"Response: {response.text}")
+            print("\nTrying alternative endpoints...")
+            
+            # Try alternative endpoints
+            endpoints = [
+                "https://api.runpod.io/v2/pod",
+                "https://api.runpod.io/v2/pods",
+                "https://api.runpod.io/v2/endpoint/pods"
+            ]
+            
+            for endpoint in endpoints:
+                try:
+                    alt_response = requests.get(endpoint, headers=headers)
+                    print(f"  {endpoint}: {alt_response.status_code}")
+                    if alt_response.status_code == 200:
+                        print(f"  Success with {endpoint}")
+                        break
+                except Exception as e:
+                    print(f"  {endpoint}: Error - {e}")
+                    
     except Exception as e:
         print(f"Error listing pods: {e}")
+        print("Please check your API key and permissions.")
 
 def main():
     args = parse_arguments()
