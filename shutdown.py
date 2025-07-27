@@ -24,13 +24,35 @@ def shutdown_pod():
         print("Error: Could not retrieve RUNPOD_POD_ID.")
         sys.exit(1)
 
-    # Construct the API endpoint URL for stopping the pod
-    stop_url = f"https://api.runpod.io/v2/pod/{pod_id}/stop"
-
-    # Set up the authorization headers
+    # First, let's check if the pod exists and get its status
+    pod_url = f"https://api.runpod.io/v2/pod/{pod_id}"
     headers = {
         "Authorization": f"Bearer {api_key}"
     }
+
+    print(f"Checking pod status for: {pod_id}...")
+    pod_response = requests.get(pod_url, headers=headers)
+    
+    if pod_response.status_code == 404:
+        print(f"Pod {pod_id} not found. It may have been already stopped/deleted.")
+        print("Available pods:")
+        list_pods(api_key)
+        return
+    elif pod_response.status_code != 200:
+        print(f"Failed to get pod info. Status code: {pod_response.status_code}")
+        print(f"Response: {pod_response.text}")
+        return
+    
+    pod_info = pod_response.json()
+    print(f"Pod status: {pod_info.get('desiredStatus', 'unknown')}")
+    
+    # Only try to stop if pod is running
+    if pod_info.get('desiredStatus') == 'STOPPED':
+        print("Pod is already stopped.")
+        return
+
+    # Construct the API endpoint URL for stopping the pod
+    stop_url = f"https://api.runpod.io/v2/pod/{pod_id}/stop"
 
     # Make the POST request to stop the pod
     print(f"Sending stop request for pod: {pod_id}...")
@@ -42,6 +64,29 @@ def shutdown_pod():
     else:
         print(f"Failed to stop pod. Status code: {response.status_code}")
         print(f"Response: {response.text}")
+
+def list_pods(api_key):
+    """List all available pods for debugging"""
+    try:
+        headers = {
+            "Authorization": f"Bearer {api_key}"
+        }
+        response = requests.get("https://api.runpod.io/v2/pod", headers=headers)
+        
+        if response.status_code == 200:
+            pods = response.json()
+            if pods:
+                print("Available pods:")
+                for pod in pods:
+                    pod_id = pod.get('id', 'unknown')
+                    status = pod.get('desiredStatus', 'unknown')
+                    print(f"  - {pod_id}: {status}")
+            else:
+                print("No pods found.")
+        else:
+            print(f"Failed to list pods. Status code: {response.status_code}")
+    except Exception as e:
+        print(f"Error listing pods: {e}")
 
 def main():
     args = parse_arguments()
