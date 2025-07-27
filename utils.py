@@ -191,3 +191,28 @@ class SSIMLoss(nn.Module):
             self.channel = channel
 
         return 1 - self._ssim(img1, img2, window, self.window_size, channel, self.size_average)
+
+
+import torch
+import torch.nn as nn
+import kornia  # kornia has efficient pyramid implementations
+
+class LaplacianPyramidLoss(nn.Module):
+    def __init__(self, max_level=3, loss_func=nn.L1Loss()):
+        super().__init__()
+        self.max_level = max_level
+        self.loss_func = loss_func
+
+    def forward(self, y_pred, y_true):
+        # Construct Laplacian pyramids
+        pred_pyr = kornia.geometry.transform.laplacian_pyramid(y_pred, self.max_level)
+        true_pyr = kornia.geometry.transform.laplacian_pyramid(y_true, self.max_level)
+
+        total_loss = 0
+        # Weight levels differently to emphasize high frequencies
+        for i in range(self.max_level):
+            weight = 2.0 ** i
+            level_loss = self.loss_func(pred_pyr[i], true_pyr[i])
+            total_loss += weight * level_loss
+            
+        return total_loss
