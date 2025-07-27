@@ -17,7 +17,7 @@ import signal
 import sys
 from safetensors.torch import save_file, load_file
 from vae import VAE_models
-from utils import get_device, LaplacianPyramidLoss
+from utils import get_device, GaussianPyramidLoss
 
 # Set the backend to be thread-safe for DataLoader
 decord.bridge.set_bridge('torch')
@@ -268,8 +268,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         model.gradient_checkpointing_enable()
     
     # Loss functions for reconstruction
-    l1_loss = nn.L1Loss()
-    laplacian_loss = LaplacianPyramidLoss(max_level=3, loss_func=nn.L1Loss())
+    gaussian_loss = GaussianPyramidLoss(max_level=3, loss_func=nn.L1Loss())
     
     best_val_loss = float('inf')
     start_epoch = 0
@@ -369,8 +368,6 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         model.train()
         train_loss = 0.0
         train_recon_loss = 0.0
-        train_l1_loss = 0.0
-        train_laplacian_loss = 0.0
         train_kl_loss = 0.0
         
         with tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs} [Train]") as pbar:
@@ -385,9 +382,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                 recon, posterior_mean, posterior_logvar, latent = model(frames)
                 
                 # Calculate losses
-                l1_recon_loss = l1_loss(recon, frames)
-                laplacian_recon_loss = laplacian_loss(recon, frames)
-                recon_loss = l1_recon_loss + 0.15 * laplacian_recon_loss  # Combine L1 and Laplacian
+                recon_loss = gaussian_loss(recon, frames)  # Use only Gaussian pyramid loss
                 
                 # Calculate KL divergence manually
                 kl_loss = -0.5 * torch.sum(1 + posterior_logvar - posterior_mean.pow(2) - posterior_logvar.exp())
@@ -438,16 +433,12 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                 # Update metrics
                 train_loss += total_loss.item()
                 train_recon_loss += recon_loss.item()
-                train_l1_loss += l1_recon_loss.item()
-                train_laplacian_loss += laplacian_recon_loss.item()
                 train_kl_loss += kl_loss.item()
                 
                 # Update progress bar
                 pbar.set_postfix({
                     'loss': f'{total_loss.item():.4f}',
                     'recon': f'{recon_loss.item():.4f}',
-                    'l1': f'{l1_recon_loss.item():.4f}',
-                    'lap': f'{laplacian_recon_loss.item():.4f}',
                     'kl': f'{kl_loss.item():.4f}'
                 })
                 
@@ -455,8 +446,6 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                 wandb.log({
                     'train_batch_loss': total_loss.item(),
                     'train_batch_recon_loss': recon_loss.item(),
-                    'train_batch_l1_loss': l1_recon_loss.item(),
-                    'train_batch_laplacian_loss': laplacian_recon_loss.item(),
                     'train_batch_kl_loss': kl_loss.item(),
                     'learning_rate': optimizer.param_groups[0]['lr'],
                     'beta': current_beta,
@@ -496,8 +485,6 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         model.eval()
         val_loss = 0.0
         val_recon_loss = 0.0
-        val_l1_loss = 0.0
-        val_laplacian_loss = 0.0
         val_kl_loss = 0.0
         sample_images = []  # Store sample images for logging
         
@@ -510,9 +497,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                     recon, posterior_mean, posterior_logvar, latent = model(frames)
                     
                     # Calculate losses
-                    l1_recon_loss = l1_loss(recon, frames)
-                    laplacian_recon_loss = laplacian_loss(recon, frames)
-                    recon_loss = l1_recon_loss + 0.15 * laplacian_recon_loss  # Combine L1 and Laplacian
+                    recon_loss = gaussian_loss(recon, frames)  # Use only Gaussian pyramid loss
                     
                     # Calculate KL divergence manually
                     kl_loss = -0.5 * torch.sum(1 + posterior_logvar - posterior_mean.pow(2) - posterior_logvar.exp())
@@ -524,8 +509,6 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                     # Update metrics
                     val_loss += total_loss.item()
                     val_recon_loss += recon_loss.item()
-                    val_l1_loss += l1_recon_loss.item()
-                    val_laplacian_loss += laplacian_recon_loss.item()
                     val_kl_loss += kl_loss.item()
                     
                     # Capture sample images from first batch
@@ -547,8 +530,6 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                     pbar.set_postfix({
                         'loss': f'{total_loss.item():.4f}',
                         'recon': f'{recon_loss.item():.4f}',
-                        'l1': f'{l1_recon_loss.item():.4f}',
-                        'lap': f'{laplacian_recon_loss.item():.4f}',
                         'kl': f'{kl_loss.item():.4f}'
                     })
                     
@@ -558,12 +539,12 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         train_loss /= len(train_loader)
         train_recon_loss /= len(train_loader)
         train_l1_loss /= len(train_loader)
-        train_laplacian_loss /= len(train_loader)
+        train_gaussian_loss /= len(train_loader)
         train_kl_loss /= len(train_loader)
         val_loss /= len(val_loader)
         val_recon_loss /= len(val_loader)
         val_l1_loss /= len(val_loader)
-        val_laplacian_loss /= len(val_loader)
+        val_gaussian_loss /= len(val_loader)
         val_kl_loss /= len(val_loader)
         
 
@@ -574,12 +555,12 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
             'train_loss': train_loss,
             'train_recon_loss': train_recon_loss,
             'train_l1_loss': train_l1_loss,
-            'train_laplacian_loss': train_laplacian_loss,
+            'train_gaussian_loss': train_gaussian_loss,
             'train_kl_loss': train_kl_loss,
             'val_loss': val_loss,
             'val_recon_loss': val_recon_loss,
             'val_l1_loss': val_l1_loss,
-            'val_laplacian_loss': val_laplacian_loss,
+            'val_gaussian_loss': val_gaussian_loss,
             'val_kl_loss': val_kl_loss,
             'learning_rate': optimizer.param_groups[0]['lr'],
             'beta': current_beta,
@@ -592,8 +573,8 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         
         # Print epoch summary
         print(f"Epoch {epoch+1}/{num_epochs}:")
-        print(f"  Train - Loss: {train_loss:.4f}, Recon: {train_recon_loss:.4f}, L1: {train_l1_loss:.4f}, Lap: {train_laplacian_loss:.4f}, KL: {train_kl_loss:.4f}")
-        print(f"  Val   - Loss: {val_loss:.4f}, Recon: {val_recon_loss:.4f}, L1: {val_l1_loss:.4f}, Lap: {val_laplacian_loss:.4f}, KL: {val_kl_loss:.4f}")
+        print(f"  Train - Loss: {train_loss:.4f}, Recon: {train_recon_loss:.4f}, L1: {train_l1_loss:.4f}, Gauss: {train_gaussian_loss:.4f}, KL: {train_kl_loss:.4f}")
+        print(f"  Val   - Loss: {val_loss:.4f}, Recon: {val_recon_loss:.4f}, L1: {val_l1_loss:.4f}, Gauss: {val_gaussian_loss:.4f}, KL: {val_kl_loss:.4f}")
         
         # Save best model
         if val_loss < best_val_loss:
