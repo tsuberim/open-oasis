@@ -538,13 +538,9 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         # Calculate averages
         train_loss /= len(train_loader)
         train_recon_loss /= len(train_loader)
-        train_l1_loss /= len(train_loader)
-        train_gaussian_loss /= len(train_loader)
         train_kl_loss /= len(train_loader)
         val_loss /= len(val_loader)
         val_recon_loss /= len(val_loader)
-        val_l1_loss /= len(val_loader)
-        val_gaussian_loss /= len(val_loader)
         val_kl_loss /= len(val_loader)
         
 
@@ -554,13 +550,9 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
             'epoch': epoch + 1,
             'train_loss': train_loss,
             'train_recon_loss': train_recon_loss,
-            'train_l1_loss': train_l1_loss,
-            'train_gaussian_loss': train_gaussian_loss,
             'train_kl_loss': train_kl_loss,
             'val_loss': val_loss,
             'val_recon_loss': val_recon_loss,
-            'val_l1_loss': val_l1_loss,
-            'val_gaussian_loss': val_gaussian_loss,
             'val_kl_loss': val_kl_loss,
             'learning_rate': optimizer.param_groups[0]['lr'],
             'beta': current_beta,
@@ -573,8 +565,8 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         
         # Print epoch summary
         print(f"Epoch {epoch+1}/{num_epochs}:")
-        print(f"  Train - Loss: {train_loss:.4f}, Recon: {train_recon_loss:.4f}, L1: {train_l1_loss:.4f}, Gauss: {train_gaussian_loss:.4f}, KL: {train_kl_loss:.4f}")
-        print(f"  Val   - Loss: {val_loss:.4f}, Recon: {val_recon_loss:.4f}, L1: {val_l1_loss:.4f}, Gauss: {val_gaussian_loss:.4f}, KL: {val_kl_loss:.4f}")
+        print(f"  Train - Loss: {train_loss:.4f}, Recon: {train_recon_loss:.4f}, KL: {train_kl_loss:.4f}")
+        print(f"  Val   - Loss: {val_loss:.4f}, Recon: {val_recon_loss:.4f}, KL: {val_kl_loss:.4f}")
         
         # Save best model
         if val_loss < best_val_loss:
