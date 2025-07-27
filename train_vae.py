@@ -449,7 +449,8 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                     'train_batch_kl_loss': kl_loss.item(),
                     'learning_rate': optimizer.param_groups[0]['lr'],
                     'beta': current_beta,
-                    'epoch': epoch + 1
+                    'epoch': epoch + 1,
+                    'global_step': global_batch_count
                 }, step=epoch * len(train_loader) + batch_idx)
                 
                 # Log sample reconstructions during training every 100 batches
@@ -556,6 +557,10 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
             'val_kl_loss': val_kl_loss,
             'learning_rate': optimizer.param_groups[0]['lr'],
             'beta': current_beta,
+            'global_step': global_batch_count,
+            'current_beta': current_beta,
+            'recon_kl_ratio': train_recon_loss / (train_kl_loss + 1e-8),
+            'val_recon_kl_ratio': val_recon_loss / (val_kl_loss + 1e-8),
         }
         
         # Add validation sample images
