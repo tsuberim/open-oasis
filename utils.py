@@ -135,7 +135,7 @@ def load_actions(path, action_offset=None):
     return actions
 
 class GaussianPyramidLoss(nn.Module):
-    def __init__(self, max_level=3, loss_func=nn.L1Loss()):
+    def __init__(self, max_level=6, loss_func=nn.L1Loss()):
         super().__init__()
         self.max_level = max_level
         self.loss_func = loss_func
