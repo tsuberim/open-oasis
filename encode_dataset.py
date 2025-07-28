@@ -47,8 +47,8 @@ def encode_video_dataset(model, dataset, device, output_dir="./encoded", batch_s
         # Create a dummy input to get latent dimensions
         dummy_input = torch.randn(1, 3, 360, 640).to(device)
         _, _, _, latent = model(dummy_input)
-        latent_dim = latent.shape[1]
-        print(f"Latent dimension: {latent_dim}")
+        latent_shape = latent.shape[1:]  # Remove batch dimension
+        print(f"Latent shape: {latent_shape}")
     
     # Process each video separately
     video_metadata = dataset.video_metadata
@@ -109,9 +109,9 @@ def encode_video_dataset(model, dataset, device, output_dir="./encoded", batch_s
             # Create datasets (no compression)
             latents_dataset = h5_file.create_dataset(
                 'latents', 
-                shape=(actual_frame_count, latent_dim), 
+                shape=(actual_frame_count, *latent_shape), 
                 dtype=np.float32,
-                chunks=(min(100, actual_frame_count), latent_dim)
+                chunks=(min(100, actual_frame_count), *latent_shape)
             )
             
             # Store video metadata
@@ -125,7 +125,7 @@ def encode_video_dataset(model, dataset, device, output_dir="./encoded", batch_s
             metadata_group.attrs['duration'] = duration
             metadata_group.attrs['width'] = video_info['width']
             metadata_group.attrs['height'] = video_info['height']
-            metadata_group.attrs['latent_dim'] = latent_dim
+            metadata_group.attrs['latent_shape'] = latent_shape
             metadata_group.attrs['encoding_timestamp'] = time.time()
             
             # Process frames in batches
@@ -142,10 +142,14 @@ def encode_video_dataset(model, dataset, device, output_dir="./encoded", batch_s
                     # Encode frames
                     _, _, _, latents = model(frames)
                     
+                    # Flatten latents from (batch_size, seq_len, latent_dim) to (batch_size, seq_len * latent_dim)
+                    batch_size, seq_len, latent_dim = latents.shape
+                    latents_flat = latents.reshape(batch_size, -1)
+                    
                     # Store latents
                     start_frame = batch_start
                     end_frame = batch_end
-                    latents_dataset[start_frame:end_frame] = latents.cpu().numpy()
+                    latents_dataset[start_frame:end_frame] = latents_flat.cpu().numpy()
         
         print(f"  Saved encoded video to {h5_path}")
     
