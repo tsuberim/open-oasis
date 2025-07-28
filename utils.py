@@ -11,7 +11,7 @@ from torchvision.transforms.functional import resize
 from einops import rearrange
 from typing import Mapping, Sequence
 import torch.nn.functional as F
-import kornia  # kornia has efficient pyramid implementations
+# import kornia  # kornia has efficient pyramid implementations
 
 
 def sigmoid_beta_schedule(timesteps, start=-3, end=3, tau=1, clamp_min=1e-5):
