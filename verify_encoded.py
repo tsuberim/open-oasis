@@ -41,7 +41,7 @@ def verify_encoded_files(encoded_dir="./encoded"):
             original_fps = metadata.attrs.get('original_fps', 0)
             target_fps = metadata.attrs.get('target_fps', 0)
             duration = metadata.attrs.get('duration', 0)
-            latent_dim = metadata.attrs.get('latent_dim', 0)
+            latent_shape = metadata.attrs.get('latent_shape', (0,))
             
             total_frames += actual_frames
             
@@ -51,7 +51,7 @@ def verify_encoded_files(encoded_dir="./encoded"):
             print(f"  Target: {target_frames:,} frames @ {target_fps} fps")
             print(f"  Actual: {actual_frames:,} frames")
             print(f"  Duration: {duration:.1f}s")
-            print(f"  Latent dim: {latent_dim}")
+            print(f"  Latent shape: {latent_shape}")
             print(f"  File size: {file_size_mb:.1f} MB")
             print(f"  Latents shape: {latents.shape}")
             print(f"  Latents dtype: {latents.dtype}")
@@ -88,7 +88,7 @@ def load_encoded_video(h5_path, start_frame=0, end_frame=None):
             'original_fps': metadata.attrs.get('original_fps', 0),
             'target_fps': metadata.attrs.get('target_fps', 0),
             'duration': metadata.attrs.get('duration', 0),
-            'latent_dim': metadata.attrs.get('latent_dim', 0),
+            'latent_shape': metadata.attrs.get('latent_shape', (0,)),
             'loaded_frames': end_frame - start_frame
         }
         

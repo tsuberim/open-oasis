@@ -142,14 +142,10 @@ def encode_video_dataset(model, dataset, device, output_dir="./encoded", batch_s
                     # Encode frames
                     _, _, _, latents = model(frames)
                     
-                    # Flatten latents from (batch_size, seq_len, latent_dim) to (batch_size, seq_len * latent_dim)
-                    batch_size, seq_len, latent_dim = latents.shape
-                    latents_flat = latents.reshape(batch_size, -1)
-                    
-                    # Store latents
+                    # Store latents (keep original shape)
                     start_frame = batch_start
                     end_frame = batch_end
-                    latents_dataset[start_frame:end_frame] = latents_flat.cpu().numpy()
+                    latents_dataset[start_frame:end_frame] = latents.cpu().numpy()
         
         print(f"  Saved encoded video to {h5_path}")
     
