@@ -248,6 +248,7 @@ def save_checkpoint_on_signal(model, optimizer, scheduler, epoch, best_val_loss,
             'timestamp': time.time(),
             'current_beta': current_beta,
             'global_batch_count': global_batch_count,
+            'wandb_run_id': wandb.run.id if wandb.run else None,
         }, metadata_path)
         
         print(f"  Checkpoint saved successfully at epoch {epoch+1}, batch {global_batch_count}")
@@ -425,6 +426,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                         'best_val_loss': best_val_loss,
                         'timestamp': current_time,
                         'current_beta': current_beta,
+                        'wandb_run_id': wandb.run.id if wandb.run else None,
                     }, metadata_path)
                     
                     last_checkpoint_time = current_time
@@ -598,6 +600,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                 'val_loss': val_loss,
                 'train_loss': train_loss,
                 'best_val_loss': best_val_loss,
+                'wandb_run_id': wandb.run.id if wandb.run else None,
             }, best_metadata_path)
             print(f"  Saved best model with val_loss: {val_loss:.4f}")
         
@@ -629,10 +632,24 @@ def main():
     checkpoint_dir = Path(args.checkpoint_dir)
     checkpoint_dir.mkdir(exist_ok=True)
     
+    # Check for existing wandb run ID in checkpoint metadata
+    wandb_run_id = None
+    latest_metadata_path = checkpoint_dir / 'vae_checkpoint_latest_metadata.pth'
+    if latest_metadata_path.exists():
+        try:
+            metadata = torch.load(latest_metadata_path, map_location='cpu')
+            wandb_run_id = metadata.get('wandb_run_id')
+            if wandb_run_id:
+                print(f"Found wandb run ID in checkpoint: {wandb_run_id}")
+        except Exception as e:
+            print(f"Error loading wandb run ID from checkpoint: {e}")
+    
     # Initialize wandb
     wandb.init(
         project=args.wandb_project,
         name=args.wandb_run_name and f"{args.wandb_run_name}-vae-train",
+        id=wandb_run_id,  # Resume existing run if available
+        resume="allow" if wandb_run_id else None,  # Allow resuming if run ID exists
         config={
             "batch_size": args.batch_size,
             "epochs": args.epochs,
