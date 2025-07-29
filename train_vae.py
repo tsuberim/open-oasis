@@ -689,7 +689,7 @@ def main():
     
     # Create VAE model
     print("Creating VAE model...")
-    model = VAE_models["vit-l-20-shallow-encoder"]()
+    model = VAE_models["vit-l-20-shallow-encoder"](latent_dim=32)
     total_params = sum(p.numel() for p in model.parameters())
     print(f"VAE model created with {total_params:,} parameters")
     

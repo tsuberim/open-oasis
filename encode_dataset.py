@@ -47,8 +47,8 @@ def encode_video_dataset(model, dataset, device, output_dir="./encoded", batch_s
         # Create a dummy input to get latent dimensions
         dummy_input = torch.randn(1, 3, 360, 640).to(device)
         _, _, _, latent = model(dummy_input)
-        latent_shape = latent.shape[1:]  # Remove batch dimension
-        print(f"Latent shape: {latent_shape}")
+        latent_dim = latent.shape[1]  # The latent is already flattened
+        print(f"Latent dimension: {latent_dim}")
     
     # Process each video separately
     video_metadata = dataset.video_metadata
