@@ -251,6 +251,11 @@ class AutoencoderKL(nn.Module):
         elif isinstance(m, nn.LayerNorm):
             nn.init.constant_(m.bias, 0.0)
             nn.init.constant_(m.weight, 1.0)
+        elif isinstance(m, nn.Conv2d):
+            # Initialize conv layers with kaiming initialization
+            nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0.0)
 
     def patchify(self, x):
         # patchify
