@@ -221,6 +221,16 @@ class AutoencoderKL(nn.Module):
         self.dec_norm = norm_layer(dec_dim)
         self.predictor = nn.Linear(dec_dim, self.patch_dim)  # decoder to patch
 
+        # Final convolution layer for refinement
+        self.final_conv = nn.Sequential(
+            nn.Conv2d(3, 64, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 32, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32, 3, kernel_size=3, padding=1),
+            nn.Sigmoid()  # Ensure output is in [0, 1] range
+        )
+
         # initialize this weight first
         self.initialize_weights()
 
@@ -308,6 +318,10 @@ class AutoencoderKL(nn.Module):
 
         # unpatchify
         dec = self.unpatchify(z)
+        
+        # Apply final convolution layer for refinement
+        dec = self.final_conv(dec)
+        
         return dec
 
     def autoencode(self, input, sample_posterior=True):
