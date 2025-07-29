@@ -228,7 +228,6 @@ class AutoencoderKL(nn.Module):
             nn.Conv2d(64, 32, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
             nn.Conv2d(32, 3, kernel_size=3, padding=1),
-            nn.Sigmoid()  # Ensure output is in [0, 1] range
         )
 
         # initialize this weight first
