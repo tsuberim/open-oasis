@@ -321,7 +321,7 @@ class AutoencoderKL(nn.Module):
         # Apply final convolution layer for refinement
         conv_result = self.final_conv(dec)
         
-        return dec + conv_result
+        return F.sigmoid(dec + conv_result)
 
     def autoencode(self, input, sample_posterior=True):
         posterior = self.encode(input)
