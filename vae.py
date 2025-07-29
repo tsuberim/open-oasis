@@ -320,9 +320,9 @@ class AutoencoderKL(nn.Module):
         dec = self.unpatchify(z)
         
         # Apply final convolution layer for refinement
-        dec += self.final_conv(dec)
+        conv_result = self.final_conv(dec)
         
-        return dec
+        return dec + conv_result
 
     def autoencode(self, input, sample_posterior=True):
         posterior = self.encode(input)
