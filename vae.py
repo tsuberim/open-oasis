@@ -320,7 +320,7 @@ class AutoencoderKL(nn.Module):
         dec = self.unpatchify(z)
         
         # Apply final convolution layer for refinement
-        dec = self.final_conv(dec)
+        dec += self.final_conv(dec)
         
         return dec
 
