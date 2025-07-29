@@ -4,6 +4,7 @@ import subprocess
 
 VIDEOS_DIR = "videos"
 URLS_FILE = "urls.txt"
+COOKIES_FILE = "cookies.txt"
 
 os.makedirs(VIDEOS_DIR, exist_ok=True)
 
@@ -31,8 +32,15 @@ for url in urls:
         "--no-audio",
         "--recode-video", "mp4",
         "-o", out_path,
-        url
     ]
+    
+    # Add cookies if cookies.txt exists
+    if os.path.exists(COOKIES_FILE):
+        cmd.extend(["--cookies", COOKIES_FILE])
+        print(f"Using cookies from {COOKIES_FILE}")
+    
+    cmd.append(url)
+    
     try:
         subprocess.run(cmd, check=True)
     except subprocess.CalledProcessError:
