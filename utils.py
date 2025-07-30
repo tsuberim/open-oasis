@@ -181,7 +181,7 @@ class LaplacianPyramidLoss(nn.Module):
         pyramid_true = kornia.geometry.transform.build_pyramid(y_true, self.max_level)
 
         laplacian_loss = 0
-        for i in range(self.max_level):
+        for i in range(self.max_level - 1):  # Only go up to max_level - 2 to avoid index error
             # Upsample the next level of the pyramid
             up_pred = kornia.geometry.transform.pyrup(pyramid_pred[i+1])
             up_true = kornia.geometry.transform.pyrup(pyramid_true[i+1])
