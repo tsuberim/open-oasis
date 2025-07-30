@@ -164,7 +164,7 @@ import torch
 import torch.nn as nn
 import kornia
 
-class CombinedL1LaplacianLoss(nn.Module):
+class LaplacianPyramidLoss(nn.Module):
     def __init__(self, max_level=3, lambda_l1=1.0, loss_func=nn.L1Loss()):
         super().__init__()
         self.max_level = max_level
