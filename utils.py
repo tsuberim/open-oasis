@@ -160,41 +160,45 @@ class GaussianPyramidLoss(nn.Module):
             
         return total_loss
 
-class LaplacianPyramidLoss(nn.Module):
-    def __init__(self, max_level=3, loss_func=nn.L1Loss()):
+import torch
+import torch.nn as nn
+import kornia
+
+class CombinedL1LaplacianLoss(nn.Module):
+    def __init__(self, max_level=3, lambda_l1=1.0, loss_func=nn.L1Loss()):
         super().__init__()
         self.max_level = max_level
+        self.lambda_l1 = lambda_l1  # Weight for the direct L1 loss component
         self.loss_func = loss_func
 
     def forward(self, y_pred, y_true):
-        total_loss = 0
-        
-        # Start with the original images
-        current_pred = y_pred
-        current_true = y_true
+        # --- 1. Calculate direct L1 loss on original images ---
+        l1_loss = self.loss_func(y_pred, y_true)
 
+        # --- 2. Calculate Laplacian Pyramid Loss ---
+        # Build Gaussian pyramids
+        pyramid_pred = kornia.geometry.transform.build_pyramid(y_pred, self.max_level)
+        pyramid_true = kornia.geometry.transform.build_pyramid(y_true, self.max_level)
+
+        laplacian_loss = 0
         for i in range(self.max_level):
-            # 1. Downsample the current level image
-            down_pred = kornia.geometry.transform.pyrdown(current_pred)
-            down_true = kornia.geometry.transform.pyrdown(current_true)
-
-            # 2. Upsample it back
-            up_pred = kornia.geometry.transform.pyrup(down_pred)
-            up_true = kornia.geometry.transform.pyrup(down_true)
+            # Upsample the next level of the pyramid
+            up_pred = kornia.geometry.transform.pyrup(pyramid_pred[i+1])
+            up_true = kornia.geometry.transform.pyrup(pyramid_true[i+1])
             
-            # 3. Subtract to get the detail map (the Laplacian level)
-            # Ensure sizes match before subtraction, as upsampling might have off-by-one pixel differences
-            h, w = current_pred.shape[2:]
-            laplacian_pred = current_pred - up_pred[:, :, :h, :w]
-            laplacian_true = current_true - up_true[:, :, :h, :w]
+            # Ensure sizes match before subtraction to get the Laplacian
+            h, w = pyramid_pred[i].shape[2:]
+            laplacian_pred = pyramid_pred[i] - up_pred[:, :, :h, :w]
+            laplacian_true = pyramid_true[i] - up_true[:, :, :h, :w]
 
-            # 4. Calculate the weighted loss for this detail map
-            weight = 2.0 ** (self.max_level - 1 - i)
-            level_loss = self.loss_func(laplacian_pred, laplacian_true)
-            total_loss += weight * level_loss
+            # Calculate loss for this level's detail map
+            laplacian_loss += self.loss_func(laplacian_pred, laplacian_true)
 
-            # 5. The downsampled image becomes the starting point for the next level
-            current_pred = down_pred
-            current_true = down_true
+        # Add the loss for the final, coarsest level (the residual)
+        residual_loss = self.loss_func(pyramid_pred[-1], pyramid_true[-1])
+        laplacian_loss += residual_loss
             
+        # --- 3. Combine the two losses ---
+        total_loss = laplacian_loss + self.lambda_l1 * l1_loss
+        
         return total_loss

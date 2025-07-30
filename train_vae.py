@@ -220,7 +220,7 @@ class VideoDataset(Dataset):
                 del reader
         self._video_readers.clear()
 
-def save_checkpoint_on_signal(model, optimizer, scheduler, epoch, best_val_loss, current_beta, checkpoint_dir, global_batch_count):
+def save_checkpoint_on_signal(model, optimizer, scheduler, epoch, best_val_loss, current_beta, checkpoint_dir, global_batch_count, batch_idx=0):
     """Save checkpoint when receiving termination signal"""
     print(f"\nReceived termination signal. Saving checkpoint...")
     
@@ -242,6 +242,7 @@ def save_checkpoint_on_signal(model, optimizer, scheduler, epoch, best_val_loss,
         print(f"  Saving metadata to {metadata_path}")
         torch.save({
             'epoch': epoch,
+            'batch_idx': batch_idx,
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
             'best_val_loss': best_val_loss,
@@ -303,14 +304,22 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                     metadata = torch.load(latest_metadata_path, map_location=device)
                     optimizer.load_state_dict(metadata['optimizer_state_dict'])
                     scheduler.load_state_dict(metadata['scheduler_state_dict'])
-                    start_epoch = metadata['epoch'] + 1
+                    start_epoch = metadata['epoch']
                     best_val_loss = metadata['best_val_loss']
                     
-                    # Recalculate global_batch_count based on start_epoch and dataset size
-                    global_batch_count = start_epoch * len(train_loader)
+                    # Check if we need to resume from a specific batch within the epoch
+                    if 'batch_idx' in metadata:
+                        resume_batch_idx = metadata['batch_idx'] + 1
+                        print(f"Resuming from epoch {start_epoch}, batch {resume_batch_idx} within epoch")
+                    else:
+                        resume_batch_idx = 0
+                        print(f"Resuming from epoch {start_epoch}, starting from beginning of epoch")
+                    
+                    # Recalculate global_batch_count based on start_epoch and batch_idx
+                    global_batch_count = start_epoch * len(train_loader) + resume_batch_idx
                     
                     print("Metadata loaded successfully")
-                    print(f"Resumed from epoch {start_epoch-1}, batch {global_batch_count}, best val loss: {best_val_loss:.4f}")
+                    print(f"Resumed from epoch {start_epoch}, batch {global_batch_count}, best val loss: {best_val_loss:.4f}")
                     
                 except Exception as e:
                     print(f"Error loading metadata: {e}")
@@ -319,11 +328,13 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                     start_epoch = 0
                     best_val_loss = float('inf')
                     global_batch_count = 0
+                    resume_batch_idx = 0
             else:
                 print("No metadata file found, continuing with loaded model weights but fresh training state...")
                 start_epoch = 0
                 best_val_loss = float('inf')
                 global_batch_count = 0
+                resume_batch_idx = 0
                 
         except Exception as e:
             print(f"Error loading model weights: {e}")
@@ -332,6 +343,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
             start_epoch = 0
             best_val_loss = float('inf')
             global_batch_count = 0
+            resume_batch_idx = 0
     
     # Override learning rate from function parameter
     for param_group in optimizer.param_groups:
@@ -340,7 +352,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
 
     # Set up signal handlers for graceful shutdown
     def signal_handler(signum, frame):
-        save_checkpoint_on_signal(model, optimizer, scheduler, epoch, best_val_loss, current_beta, checkpoint_dir, global_batch_count)
+        save_checkpoint_on_signal(model, optimizer, scheduler, epoch, best_val_loss, current_beta, checkpoint_dir, global_batch_count, actual_batch_idx if 'actual_batch_idx' in locals() else 0)
     
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
@@ -372,7 +384,19 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         train_kl_loss = 0.0
         
         with tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs} [Train]") as pbar:
+            # Skip batches if resuming from a specific batch within the epoch
+            if epoch == start_epoch and 'resume_batch_idx' in locals() and resume_batch_idx > 0:
+                print(f"Skipping first {resume_batch_idx} batches in epoch {epoch+1} to resume from batch {resume_batch_idx}")
+                # Skip the batches we've already processed
+                for _ in range(resume_batch_idx):
+                    next(pbar)
+                
             for batch_idx, frames in enumerate(pbar):
+                # Adjust batch_idx if we're resuming from a specific batch
+                if epoch == start_epoch and 'resume_batch_idx' in locals() and resume_batch_idx > 0:
+                    actual_batch_idx = batch_idx + resume_batch_idx
+                else:
+                    actual_batch_idx = batch_idx
                 global_batch_count += 1
                 frames = frames.to(device)
                 
@@ -420,10 +444,11 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                     print(f"  Saving metadata to {metadata_path}")
                     torch.save({
                         'epoch': epoch,
+                        'batch_idx': actual_batch_idx,
                         'optimizer_state_dict': optimizer.state_dict(),
                         'scheduler_state_dict': scheduler.state_dict(),
                         'val_loss': val_loss if 'val_loss' in locals() else None,
-                        'train_loss': train_loss / (batch_idx + 1) if batch_idx > 0 else total_loss.item(),
+                        'train_loss': train_loss / (actual_batch_idx + 1) if actual_batch_idx > 0 else total_loss.item(),
                         'best_val_loss': best_val_loss,
                         'timestamp': current_time,
                         'current_beta': current_beta,
@@ -454,10 +479,10 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                     'beta': current_beta,
                     'epoch': epoch + 1,
                     'global_step': global_batch_count
-                }, step=epoch * len(train_loader) + batch_idx)
+                }, step=epoch * len(train_loader) + actual_batch_idx)
                 
                 # Log sample reconstructions during training every 100 batches
-                if batch_idx % 50 == 0:
+                if actual_batch_idx % 50 == 0:
                     with torch.no_grad():
                         # Generate reconstructions for current batch
                         batch_recon, _, _, _ = model(frames)
@@ -479,7 +504,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                         
                         wandb.log({
                             'train_samples': train_images,
-                            'train_batch': batch_idx,
+                            'train_batch': actual_batch_idx,
                             'epoch': epoch + 1
                         })
                 
