@@ -577,34 +577,10 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         print(f"  Train - Loss: {train_loss:.4f}, Recon: {train_recon_loss:.4f}, KL: {train_kl_loss:.4f}")
         print(f"  Val   - Loss: {val_loss:.4f}, Recon: {val_recon_loss:.4f}, KL: {val_kl_loss:.4f}")
         
-        # Save best model
+        # Update best validation loss (but don't save checkpoint)
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            best_model_path = checkpoint_dir / 'best_vae_model.safetensors'
-            best_metadata_path = checkpoint_dir / 'best_vae_model_metadata.pth'
-            
-            # Handle DataParallel state dict
-            if isinstance(model, nn.DataParallel):
-                model_state_dict = model.module.state_dict()
-            else:
-                model_state_dict = model.state_dict()
-            
-            # Save model weights with safetensors
-            print(f"  Saving best model weights to {best_model_path}")
-            save_file(model_state_dict, best_model_path)
-            
-            # Save metadata separately
-            print(f"  Saving best model metadata to {best_metadata_path}")
-            torch.save({
-                'epoch': epoch,
-                'optimizer_state_dict': optimizer.state_dict(),
-                'scheduler_state_dict': scheduler.state_dict(),
-                'val_loss': val_loss,
-                'train_loss': train_loss,
-                'best_val_loss': best_val_loss,
-                'wandb_run_id': wandb.run.id if wandb.run else None,
-            }, best_metadata_path)
-            print(f"  Saved best model with val_loss: {val_loss:.4f}")
+            print(f"  New best validation loss: {val_loss:.4f}")
         
 
 
