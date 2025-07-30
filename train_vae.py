@@ -17,7 +17,7 @@ import signal
 import sys
 from safetensors.torch import save_file, load_file
 from vae import VAE_models
-from utils import get_device, GaussianPyramidLoss
+from utils import get_device, GaussianPyramidLoss, LaplacianPyramidLoss
 
 # Set the backend to be thread-safe for DataLoader
 decord.bridge.set_bridge('torch')
@@ -269,8 +269,8 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         model.gradient_checkpointing_enable()
     
     # Loss functions for reconstruction
-    gaussian_loss = GaussianPyramidLoss(max_level=3, loss_func=nn.L1Loss())
-    
+    #gaussian_loss = GaussianPyramidLoss(max_level=3, loss_func=nn.L1Loss())
+    laplacian_loss = LaplacianPyramidLoss(max_level=3, loss_func=nn.L1Loss())
     best_val_loss = float('inf')
     start_epoch = 0
     last_checkpoint_time = time.time()
@@ -383,7 +383,8 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                 recon, posterior_mean, posterior_logvar, latent = model(frames)
                 
                 # Calculate losses
-                recon_loss = gaussian_loss(recon, frames)  # Use only Gaussian pyramid loss
+                #recon_loss = gaussian_loss(recon, frames)  # Use only Gaussian pyramid loss
+                recon_loss = laplacian_loss(recon, frames)  # Use only Gaussian pyramid loss
                 
                 # Calculate KL divergence manually
                 kl_loss = -0.5 * torch.sum(1 + posterior_logvar - posterior_mean.pow(2) - posterior_logvar.exp())
@@ -500,7 +501,8 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                     recon, posterior_mean, posterior_logvar, latent = model(frames)
                     
                     # Calculate losses
-                    recon_loss = gaussian_loss(recon, frames)  # Use only Gaussian pyramid loss
+                    #recon_loss = gaussian_loss(recon, frames)  # Use only Gaussian pyramid loss
+                    recon_loss = laplacian_loss(recon, frames)  # Use only Gaussian pyramid loss
                     
                     # Calculate KL divergence manually
                     kl_loss = -0.5 * torch.sum(1 + posterior_logvar - posterior_mean.pow(2) - posterior_logvar.exp())

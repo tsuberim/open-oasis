@@ -135,7 +135,7 @@ def load_actions(path, action_offset=None):
     return actions
 
 class GaussianPyramidLoss(nn.Module):
-    def __init__(self, max_level=6, loss_func=nn.L1Loss()):
+    def __init__(self, max_level=3, loss_func=nn.L1Loss()):
         super().__init__()
         self.max_level = max_level
         self.loss_func = loss_func
@@ -157,5 +157,44 @@ class GaussianPyramidLoss(nn.Module):
             weight = 2.0 ** (self.max_level - 1 - i)
             level_loss = self.loss_func(pyramid_pred[i], pyramid_true[i])
             total_loss += weight * level_loss
+            
+        return total_loss
+
+class LaplacianPyramidLoss(nn.Module):
+    def __init__(self, max_level=3, loss_func=nn.L1Loss()):
+        super().__init__()
+        self.max_level = max_level
+        self.loss_func = loss_func
+
+    def forward(self, y_pred, y_true):
+        total_loss = 0
+        
+        # Start with the original images
+        current_pred = y_pred
+        current_true = y_true
+
+        for i in range(self.max_level):
+            # 1. Downsample the current level image
+            down_pred = kornia.geometry.transform.pyrdown(current_pred)
+            down_true = kornia.geometry.transform.pyrdown(current_true)
+
+            # 2. Upsample it back
+            up_pred = kornia.geometry.transform.pyrup(down_pred)
+            up_true = kornia.geometry.transform.pyrup(down_true)
+            
+            # 3. Subtract to get the detail map (the Laplacian level)
+            # Ensure sizes match before subtraction, as upsampling might have off-by-one pixel differences
+            h, w = current_pred.shape[2:]
+            laplacian_pred = current_pred - up_pred[:, :, :h, :w]
+            laplacian_true = current_true - up_true[:, :, :h, :w]
+
+            # 4. Calculate the weighted loss for this detail map
+            weight = 2.0 ** (self.max_level - 1 - i)
+            level_loss = self.loss_func(laplacian_pred, laplacian_true)
+            total_loss += weight * level_loss
+
+            # 5. The downsampled image becomes the starting point for the next level
+            current_pred = down_pred
+            current_true = down_true
             
         return total_loss
