@@ -392,7 +392,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         else:
             train_iter = train_loader
         
-        with tqdm(train_iter, desc=f"Epoch {epoch+1}/{num_epochs} [Train]") as pbar:
+        with tqdm(train_iter, desc=f"Epoch {epoch+1}/{num_epochs} [Train]", total=len(train_loader)) as pbar:
             for batch_idx, frames in enumerate(pbar):
                 # Adjust batch_idx if we're resuming from a specific batch
                 if epoch == start_epoch and 'resume_batch_idx' in locals() and resume_batch_idx > 0:
