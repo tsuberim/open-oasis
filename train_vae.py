@@ -676,6 +676,13 @@ def main():
         target_size=tuple(args.target_size)
     )
     
+    # Calculate and display total video hours
+    total_duration_seconds = sum(m['duration'] for m in dataset.video_metadata)
+    total_hours = total_duration_seconds / 3600
+    print(f"\n{'='*50}")
+    print(f"TOTAL VIDEO HOURS: {total_hours:.2f} hours")
+    print(f"{'='*50}\n")
+    
     # Split dataset
     test_size = int(len(dataset) * args.test_ratio)
     train_size = len(dataset) - test_size
