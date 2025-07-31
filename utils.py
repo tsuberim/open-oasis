@@ -11,7 +11,7 @@ from torchvision.transforms.functional import resize
 from einops import rearrange
 from typing import Mapping, Sequence
 import torch.nn.functional as F
-import kornia  # kornia has efficient pyramid implementations
+# import kornia  # kornia has efficient pyramid implementations
 
 
 def sigmoid_beta_schedule(timesteps, start=-3, end=3, tau=1, clamp_min=1e-5):
@@ -160,9 +160,6 @@ class GaussianPyramidLoss(nn.Module):
             
         return total_loss
 
-import torch
-import torch.nn as nn
-import kornia
 
 class LaplacianPyramidLoss(nn.Module):
     def __init__(self, max_level=3, lambda_l1=1.0, loss_func=nn.L1Loss()):
