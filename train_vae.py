@@ -15,6 +15,7 @@ import decord
 import time
 import signal
 import sys
+import itertools
 from safetensors.torch import save_file, load_file
 from vae import VAE_models
 from utils import get_device, GaussianPyramidLoss, LaplacianPyramidLoss
@@ -383,14 +384,15 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         train_recon_loss = 0.0
         train_kl_loss = 0.0
         
-        with tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs} [Train]") as pbar:
-            # Skip batches if resuming from a specific batch within the epoch
-            if epoch == start_epoch and 'resume_batch_idx' in locals() and resume_batch_idx > 0:
-                print(f"Skipping first {resume_batch_idx} batches in epoch {epoch+1} to resume from batch {resume_batch_idx}")
-                # Skip the batches we've already processed
-                for _ in range(resume_batch_idx):
-                    next(pbar)
-                
+                # Handle resuming from a specific batch within the epoch
+        if epoch == start_epoch and 'resume_batch_idx' in locals() and resume_batch_idx > 0:
+            print(f"Skipping first {resume_batch_idx} batches in epoch {epoch+1} to resume from batch {resume_batch_idx}")
+            # Use itertools.islice to skip the appropriate number of batches
+            train_iter = itertools.islice(train_loader, resume_batch_idx, None)
+        else:
+            train_iter = train_loader
+        
+        with tqdm(train_iter, desc=f"Epoch {epoch+1}/{num_epochs} [Train]") as pbar:
             for batch_idx, frames in enumerate(pbar):
                 # Adjust batch_idx if we're resuming from a specific batch
                 if epoch == start_epoch and 'resume_batch_idx' in locals() and resume_batch_idx > 0:
