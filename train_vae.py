@@ -473,15 +473,18 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                 })
                 
                 # Log training metrics every batch
-                wandb.log({
-                    'train_batch_loss': total_loss.item(),
-                    'train_batch_recon_loss': recon_loss.item(),
-                    'train_batch_kl_loss': kl_loss.item(),
-                    'learning_rate': optimizer.param_groups[0]['lr'],
-                    'beta': current_beta,
-                    'epoch': epoch + 1,
-                    'global_step': global_batch_count
-                }, step=epoch * len(train_loader) + actual_batch_idx)
+                try:
+                    wandb.log({
+                        'train_batch_loss': total_loss.item(),
+                        'train_batch_recon_loss': recon_loss.item(),
+                        'train_batch_kl_loss': kl_loss.item(),
+                        'learning_rate': optimizer.param_groups[0]['lr'],
+                        'beta': current_beta,
+                        'epoch': epoch + 1,
+                        'global_step': global_batch_count
+                    }, step=epoch * len(train_loader) + actual_batch_idx)
+                except Exception as e:
+                    print(f"Warning: Failed to log to wandb: {e}")
                 
                 # Log sample reconstructions during training every 100 batches
                 if actual_batch_idx % 50 == 0:
@@ -504,11 +507,14 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                             combined = np.concatenate([orig, rec], axis=1)
                             train_images.append(wandb.Image(combined, caption=f"Train Original | Reconstruction"))
                         
-                        wandb.log({
-                            'train_samples': train_images,
-                            'train_batch': actual_batch_idx,
-                            'epoch': epoch + 1
-                        })
+                        try:
+                            wandb.log({
+                                'train_samples': train_images,
+                                'train_batch': actual_batch_idx,
+                                'epoch': epoch + 1
+                            })
+                        except Exception as e:
+                            print(f"Warning: Failed to log train samples to wandb: {e}")
                 
 
         
@@ -590,14 +596,17 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
             'beta': current_beta,
             'global_step': global_batch_count,
             'current_beta': current_beta,
-            'recon_kl_ratio': train_recon_loss / (train_kl_loss + 1e-8),
-            'val_recon_kl_ratio': val_recon_loss / (val_kl_loss + 1e-8),
+            'recon_kl_ratio': train_recon_loss / (train_kl_loss + current_beta),
+            'val_recon_kl_ratio': val_recon_loss / (val_kl_loss + current_beta),
         }
         
         # Add validation sample images
         log_dict['val_samples'] = sample_images
         
-        wandb.log(log_dict, step=(epoch + 1) * len(train_loader))
+        try:
+            wandb.log(log_dict, step=(epoch + 1) * len(train_loader))
+        except Exception as e:
+            print(f"Warning: Failed to log epoch metrics to wandb: {e}")
         
         # Print epoch summary
         print(f"Epoch {epoch+1}/{num_epochs}:")
@@ -650,22 +659,27 @@ def main():
             print(f"Error loading wandb run ID from checkpoint: {e}")
     
     # Initialize wandb
-    wandb.init(
-        project=args.wandb_project,
-        name=args.wandb_run_name and f"{args.wandb_run_name}-vae-train",
-        id=wandb_run_id,  # Resume existing run if available
-        resume="allow" if wandb_run_id else None,  # Allow resuming if run ID exists
-        config={
-            "batch_size": args.batch_size,
-            "epochs": args.epochs,
-            "lr": args.lr,
-            "test_ratio": args.test_ratio,
-            "beta": args.beta,
-            "beta_annealing": not args.no_beta_annealing,
-            "target_size": args.target_size,
-            "seed": args.seed,
-        }
-    )
+    try:
+        wandb.init(
+            project=args.wandb_project,
+            name=args.wandb_run_name and f"{args.wandb_run_name}-vae-train",
+            id=wandb_run_id,  # Resume existing run if available
+            resume="allow" if wandb_run_id else None,  # Allow resuming if run ID exists
+            config={
+                "batch_size": args.batch_size,
+                "epochs": args.epochs,
+                "lr": args.lr,
+                "test_ratio": args.test_ratio,
+                "beta": args.beta,
+                "beta_annealing": not args.no_beta_annealing,
+                "target_size": args.target_size,
+                "seed": args.seed,
+            }
+        )
+        print(f"Wandb initialized successfully. Run URL: {wandb.run.url if wandb.run else 'N/A'}")
+    except Exception as e:
+        print(f"Warning: Failed to initialize wandb: {e}")
+        print("Training will continue without wandb logging")
     
     # Get device
     device = get_device()
