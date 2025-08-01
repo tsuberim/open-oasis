@@ -376,21 +376,9 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
         train_recon_loss = 0.0
         train_kl_loss = 0.0
         
-                # Handle resuming from a specific batch within the epoch
-        if epoch == start_epoch and 'resume_batch_idx' in locals() and resume_batch_idx > 0:
-            print(f"Skipping first {resume_batch_idx} batches in epoch {epoch+1} to resume from batch {resume_batch_idx}")
-            # Use itertools.islice to skip the appropriate number of batches
-            train_iter = itertools.islice(train_loader, resume_batch_idx, None)
-        else:
-            train_iter = train_loader
-        
-        with tqdm(train_iter, desc=f"Epoch {epoch+1}/{num_epochs} [Train]", total=len(train_loader)) as pbar:
+        with tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs} [Train]", total=len(train_loader)) as pbar:
             for batch_idx, frames in enumerate(pbar):
-                # Adjust batch_idx if we're resuming from a specific batch
-                if epoch == start_epoch and 'resume_batch_idx' in locals() and resume_batch_idx > 0:
-                    actual_batch_idx = batch_idx + resume_batch_idx
-                else:
-                    actual_batch_idx = batch_idx
+                actual_batch_idx = batch_idx
                 global_batch_count += 1
                 
                 # Calculate current beta for annealing (every batch)
