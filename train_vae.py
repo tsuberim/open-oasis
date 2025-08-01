@@ -264,7 +264,7 @@ def save_checkpoint_on_signal(model, optimizer, scheduler, epoch, best_val_loss,
 def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, beta=0.00005, beta_annealing=True, checkpoint_dir="./checkpoints"):
     """Train the VAE model"""
     optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.8, patience=600)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.8, patience=1500)
     
     # Enable gradient checkpointing for memory efficiency
     if hasattr(model, 'gradient_checkpointing_enable'):
@@ -360,7 +360,7 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
 
     # Beta annealing setup
     if beta_annealing:
-        initial_beta = 0
+        initial_beta = 1e-7
         final_beta = beta
         beta_warmup_epochs = min(10, num_epochs // 4)  # Warm up over first 25% of training
     else:
