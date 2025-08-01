@@ -618,7 +618,7 @@ def main():
     parser.add_argument("--lr", "-l", type=float, default=1e-4, help="Learning rate")
     parser.add_argument("--test-ratio", "-t", type=float, default=0.15, help="Test set ratio")
     parser.add_argument("--seed", "-s", type=int, default=42, help="Random seed")
-    parser.add_argument("--beta", "-B", type=float, default=0.00001, help="Beta coefficient for KL divergence loss")
+    parser.add_argument("--beta", "-B", type=float, default=1e-4, help="Beta coefficient for KL divergence loss")
     parser.add_argument("--no-beta-annealing", action="store_true", help="Disable beta annealing")
     parser.add_argument("--target-size", "-T", nargs=2, type=int, default=[360, 640], help="Target frame size (height width)")
     parser.add_argument("--checkpoint-dir", "-c", default="./checkpoints", help="Directory to save checkpoints")
