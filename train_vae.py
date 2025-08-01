@@ -362,22 +362,13 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
     if beta_annealing:
         initial_beta = 1e-7
         final_beta = beta
-        beta_warmup_epochs = min(10, num_epochs // 4)  # Warm up over first 25% of training
+        beta_warmup_batches = 5000  # Warm up over first 5000 batches
     else:
         current_beta = beta
     
 
     
     for epoch in range(start_epoch, num_epochs):
-        # Calculate current beta for annealing
-        if beta_annealing:
-            if epoch < beta_warmup_epochs:
-                current_beta = initial_beta + (final_beta - initial_beta) * (epoch / beta_warmup_epochs)
-            else:
-                current_beta = final_beta
-        else:
-            current_beta = beta
-        
         # Training phase
         model.train()
         train_loss = 0.0
@@ -400,6 +391,16 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
                 else:
                     actual_batch_idx = batch_idx
                 global_batch_count += 1
+                
+                # Calculate current beta for annealing (every batch)
+                if beta_annealing:
+                    if global_batch_count < beta_warmup_batches:
+                        current_beta = initial_beta + (final_beta - initial_beta) * (global_batch_count / beta_warmup_batches)
+                    else:
+                        current_beta = final_beta
+                else:
+                    current_beta = beta
+                
                 frames = frames.to(device)
                 
                 # Forward pass
