@@ -360,9 +360,9 @@ def train_vae(model, train_loader, val_loader, device, num_epochs=100, lr=1e-4, 
 
     # Beta annealing setup
     if beta_annealing:
-        initial_beta = 1e-7
+        initial_beta = 1e-6
         final_beta = beta
-        beta_warmup_batches = 5000  # Warm up over first 5000 batches
+        beta_warmup_batches = 3000  # Warm up over first 5000 batches
     else:
         current_beta = beta
     
